@@ -1622,8 +1622,9 @@ class Component extends DCLogic {
     return { thinking: thinking.trim(), content: closed.replace(/^\n+/, "") };
   }
 
-  // ---- minimal markdown for chat content: headers, emphasis, code, links, lists,
-  // blockquotes, tables, hr. Hand-rolled (no CDN dependency) so it keeps working over
+  // ---- full markdown for chat content: headers, emphasis, code, links, lists,
+  // blockquotes, tables, hr, task lists, syntax highlighting.
+  // Hand-rolled (no CDN dependency) so it keeps working over
   // a LAN-only tunnel with no outside network access.
   renderContent(text, keyBase) {
     const out = [];
@@ -1632,12 +1633,26 @@ class Component extends DCLogic {
       if (!part) return;
       if (i % 2 === 1) {
         const nl = part.indexOf("\n");
-        const code = nl > -1 ? part.slice(nl + 1).replace(/\s+$/, "") : part;
-        out.push(React.createElement("pre", { key: keyBase + "-c" + i, style: {
-          background: "var(--card)", border: "1px solid var(--bd)", borderRadius: "10px",
+        const hasLang = nl > -1;
+        const lang = hasLang ? part.slice(0, nl).trim() : "";
+        const code = hasLang ? part.slice(nl + 1).replace(/\s+$/, "") : part;
+        // Detect language from common patterns
+        const detectedLang = lang || this.detectCodeLang(code);
+        out.push(React.createElement("pre", { key: keyBase + "-c" + i, className: "code-block", style: {
+          background: "var(--code)", border: "1px solid var(--bd)", borderRadius: "10px",
           padding: "12px 13px", overflowX: "auto", fontFamily: "Geist Mono, monospace",
-          fontSize: "12px", lineHeight: "1.6", color: "var(--tx4)", margin: "0 0 10px"
-        } }, code));
+          fontSize: "12px", lineHeight: "1.6", color: "var(--tx4)", margin: "0 0 10px",
+          position: "relative"
+        } }, [
+          detectedLang ? React.createElement("span", {
+            key: "lang",
+            style: {
+              position: "absolute", top: "6px", right: "10px", fontSize: "10px",
+              color: "var(--mu5)", textTransform: "lowercase", letterSpacing: "0.05em"
+            }
+          }, detectedLang) : null,
+          React.createElement("code", { key: "code", style: { fontFamily: "inherit" } }, code)
+        ].filter(Boolean)));
       } else {
         out.push.apply(out, this.mdBlocks(part.replace(/^\n+|\n+$/g, ""), keyBase + "-" + i));
       }
@@ -1649,6 +1664,28 @@ class Component extends DCLogic {
     return out;
   }
 
+  // Detect programming language from code content
+  detectCodeLang(code) {
+    if (!code || code.length < 10) return "";
+    const patterns = [
+      { lang: "javascript", re: /\b(const|let|var|function|=>|async|await|import|export|require)\b/ },
+      { lang: "python", re: /\b(def|class|import|from|print|if __name__|elif|except)\b/ },
+      { lang: "html", re: /<\/?(html|head|body|div|span|p|a|script|style)\b/i },
+      { lang: "css", re: /\{[\s\S]*?(background|border|color|margin|padding|font|display)\s*:/ },
+      { lang: "json", re: /^[\s]*[{\[][\s\S]*["\w]+[\s]*:/ },
+      { lang: "sql", re: /\b(SELECT|INSERT|UPDATE|DELETE|CREATE|ALTER|DROP|FROM|WHERE|JOIN)\b/i },
+      { lang: "bash", re: /^[\s]*(#!/.*bash|echo|export|source|\$\(|if \[|fi|done|esac)\b/m },
+      { lang: "typescript", re: /\b(interface|type|namespace|declare|readonly)\s+\w+/ },
+      { lang: "jsx", re: /\b(import React|export default|Component|<div|<span|<button)/ },
+      { lang: "markdown", re: /^#{1,6}\s|^\*\*|^\[.+\]\(.+\)|^```/m },
+      { lang: "yaml", re: /^[\w-]+:\s*$/m },
+    ];
+    for (const p of patterns) {
+      if (p.re.test(code)) return p.lang;
+    }
+    return "";
+  }
+
   mdBlocks(text, keyBase) {
     const lines = String(text || "").replace(/\r\n/g, "\n").split("\n");
     const out = [];
@@ -1658,7 +1695,8 @@ class Component extends DCLogic {
     const headerM = (l) => l.match(/^ {0,3}(#{1,6}) +(.*?) *#*$/);
     const ulM = (l) => l.match(/^(\s*)([-*+]) +(.*)$/);
     const olM = (l) => l.match(/^(\s*)(\d{1,9})[.)] +(.*)$/);
-    const isListLine = (l) => !!(ulM(l) || olM(l));
+    const taskM = (l) => l.match(/^(\s*)([-*+]) \[([ xX])\] +(.*)$/i);
+    const isListLine = (l) => !!(ulM(l) || olM(l) || taskM(l));
     const bqM = (l) => l.match(/^ {0,3}> ?(.*)$/);
     const tableRow = (l) => /\|/.test(l || "") && !isHr(l);
     const tableSep = (l) => /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/.test(l || "");
@@ -1714,9 +1752,49 @@ class Component extends DCLogic {
       }
 
       if (isListLine(line)) {
+        // Check if this is a task list
+        const taskMatch = taskM(line);
+        if (taskMatch) {
+          // Handle task list
+          const items = [];
+          while (i < lines.length) {
+            const tm = taskM(lines[i]);
+            if (!tm) break;
+            const checked = tm[3].toLowerCase() === 'x';
+            items.push({ text: tm[4], checked, indent: tm[1] });
+            i++;
+          }
+          out.push(React.createElement("ul", { key: nextKey(), className: "task-list", style: { margin: "0 0 10px", paddingLeft: "6px", listStyle: "none" } },
+            items.map((item, ii) => React.createElement("li", {
+              key: "li" + ii,
+              className: "task-item",
+              style: { marginBottom: "6px", display: "flex", alignItems: "flex-start", gap: "8px" }
+            }, [
+              React.createElement("input", {
+                key: "cb",
+                type: "checkbox",
+                checked: item.checked,
+                readOnly: true,
+                style: { marginTop: "3px", accentColor: "var(--ac)", cursor: "default" }
+              }),
+              React.createElement("span", {
+                key: "text",
+                style: {
+                  textDecoration: item.checked ? "line-through" : "none",
+                  opacity: item.checked ? 0.6 : 1,
+                  color: item.checked ? "var(--mu)" : "var(--tx2)"
+                }
+              }, this.mdInline(item.text, nextKey() + "-" + ii))
+            ])));
+          continue;
+        }
+        
+        // Regular ordered/unordered list
         const ordered = !!olM(line);
         const items = [];
         while (i < lines.length) {
+          const tm = taskM(lines[i]);
+          if (tm) break; // Stop at task list
           const m = ulM(lines[i]) || olM(lines[i]);
           if (!m || !!olM(lines[i]) !== ordered) break;
           items.push(m[3]); i++;
