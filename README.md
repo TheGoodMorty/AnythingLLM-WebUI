@@ -285,7 +285,6 @@ Want to extend this? Here are some suggestions:
 - **Per-device session partitioning** — Separate workspace chat history per device
 - **Auto-refresh sidebar** — Poll or refresh on window focus
 - **Cmd-K switcher** — Quick jump between workspaces/threads
-- **Markdown renderer** — Full markdown support for assistant replies
 - **Invite links** — Generate full URLs from invite codes
 - **Per-workspace chat export** — Client-side CSV of current thread
 - **Systemd service** — Run as a background service with auto-start
