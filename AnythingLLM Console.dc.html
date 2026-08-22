@@ -1674,7 +1674,7 @@ class Component extends DCLogic {
       { lang: "css", re: /\{[\s\S]*?(background|border|color|margin|padding|font|display)\s*:/ },
       { lang: "json", re: /^[\s]*[{\[][\s\S]*["\w]+[\s]*:/ },
       { lang: "sql", re: /\b(SELECT|INSERT|UPDATE|DELETE|CREATE|ALTER|DROP|FROM|WHERE|JOIN)\b/i },
-      { lang: "bash", re: /^[\s]*(#!/.*bash|echo|export|source|\$\(|if \[|fi|done|esac)\b/m },
+      { lang: "bash", re: /^[\s]*(#!.*bash|echo|export|source|\$\(|if \[|fi|done|esac)\b/m },
       { lang: "typescript", re: /\b(interface|type|namespace|declare|readonly)\s+\w+/ },
       { lang: "jsx", re: /\b(import React|export default|Component|<div|<span|<button)/ },
       { lang: "markdown", re: /^#{1,6}\s|^\*\*|^\[.+\]\(.+\)|^```/m },
