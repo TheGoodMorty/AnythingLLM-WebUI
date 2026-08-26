@@ -1344,8 +1344,11 @@ class Component extends DCLogic {
   }
 
   async newThread(slug, opts = {}) {
+    // AnythingLLM accepts a name in the single create call (Version A), so we
+    // never need a follow-up rename when the user provides one.
     try {
-      const j = await this.api("/workspace/" + slug + "/thread/new", { method: "POST", body: {} });
+      const body = opts.name ? { name: opts.name } : {};
+      const j = await this.api("/workspace/" + slug + "/thread/new", { method: "POST", body });
       const thread = j.thread || {};
       this.mergeThread(slug, thread);
       this.selectThread(slug, thread.slug);
@@ -1364,7 +1367,12 @@ class Component extends DCLogic {
     this.setState({ prompt: null });
     if (!value) return;
     try {
-      if (p.kind === "newWorkspace") {
+      if (p.kind === "newThreadName") {
+        // AnythingLLM accepts the name in the single create call, so no follow-up
+        // rename is needed. If the user left the default value untouched we still
+        // pass it so the server-assigned name matches what they see in the box.
+        await this.newThread(p.target, { name: value });
+      } else if (p.kind === "newWorkspace") {
         const j = await this.api("/workspace/new", { method: "POST", body: { name: value } });
         await this.loadWorkspaces();
         const slug = (j.workspace || {}).slug;
@@ -1990,7 +1998,16 @@ class Component extends DCLogic {
         const d = e.currentTarget.dataset;
         this.askConfirm("deleteThread", "Delete this thread?", "The thread and its chat history are removed from AnythingLLM. This cannot be undone.", "Delete thread", { ws: d.slug, thread: d.thread });
       },
-      onNewThread: (e) => { e.stopPropagation(); this.newThread(e.currentTarget.dataset.slug); },
+      onNewThread: (e) => {
+        e.stopPropagation();
+        const slug = e.currentTarget.dataset.slug;
+        // Ask for a name up front. The default ("New Thread") matches what the
+        // server assigns when no name is given, so hitting Submit creates a thread
+        // with a sensible name in a single API call.
+        this.askPrompt("newThreadName", "New thread",
+          "POST /v1/workspace/" + slug + "/thread/new · name is optional",
+          "New Thread", slug);
+      },
       newWorkspace: () => this.askPrompt("newWorkspace", "New workspace", "POST /v1/workspace/new", ""),
       renameActive: () => {
         if (th) this.askPrompt("renameThread", "Rename thread", "POST /v1/workspace/" + ws.slug + "/thread/" + th.slug + "/update", th.name, { ws: ws.slug, thread: th.slug });
