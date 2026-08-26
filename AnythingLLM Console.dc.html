@@ -1244,8 +1244,21 @@ class Component extends DCLogic {
     try {
       const d = await this.api("/workspace/" + slug);
       const full = (d.workspace || [])[0] || {};
-      this.setState((st) => ({ workspaces: st.workspaces.map((w) => w.slug === slug
-        ? Object.assign({}, w, full, { threads: full.threads || [] }) : w) }));
+      const newThreads = full.threads || [];
+      this.setState((st) => ({ workspaces: st.workspaces.map((w) => {
+        if (w.slug !== slug) return w;
+        // Preserve existing thread data (especially names) and merge with new data
+        // The API sometimes returns threads with missing name fields
+        const mergedThreads = newThreads.map((newT) => {
+          const existing = (w.threads || []).find((t) => t.slug === newT.slug);
+          // If the new thread has a name, use it; otherwise keep the existing name
+          if (existing && (!newT.name || newT.name === undefined || newT.name === null)) {
+            return Object.assign({}, newT, { name: existing.name });
+          }
+          return newT;
+        });
+        return Object.assign({}, w, full, { threads: mergedThreads });
+      }) }));
     } catch (e) {
       console.warn("Failed to refresh threads for", slug, ":", e);
     }
@@ -1382,14 +1395,26 @@ class Component extends DCLogic {
       if (c.kind === "deleteWorkspace") {
         await this.api("/workspace/" + c.target, { method: "DELETE" });
         const rest = this.state.workspaces.filter((w) => w.slug !== c.target);
-        this.setState({ workspaces: rest, wsSlug: rest.length ? rest[0].slug : null, threadSlug: null, panel: null }, () => this.loadWorkspaces());
+        this.setState({ workspaces: rest, wsSlug: rest.length ? rest[0].slug : null, threadSlug: null, panel: null, messages: [] }, () => this.loadWorkspaces());
         this.toast("Workspace deleted");
       } else if (c.kind === "deleteThread") {
         await this.api("/workspace/" + c.target.ws + "/thread/" + c.target.thread, { method: "DELETE" });
         const wasActive = this.state.threadSlug === c.target.thread;
         if (wasActive) this.setState({ threadSlug: null, messages: [] });
         await this.refreshThreads(c.target.ws);
-        if (wasActive) this.ensureThread(c.target.ws, null);
+        if (wasActive) {
+          // refreshThreads' setState may not have committed yet, so re-fetch fresh
+          // threads here — otherwise ensureThread could re-select the just-deleted
+          // thread from stale state.
+          try {
+            const d = await this.api("/workspace/" + c.target.ws);
+            const threads = ((d.workspace || [])[0] || {}).threads || [];
+            if (threads.length) this.selectThread(c.target.ws, threads[0].slug);
+            else this.ensureThread(c.target.ws, null);
+          } catch (e) {
+            this.ensureThread(c.target.ws, null);
+          }
+        }
         this.toast("Thread deleted");
       } else if (c.kind === "resetThread") {
         await this.api(c.target + "/chat", { method: "POST", body: { message: "/reset", mode: this.state.mode, reset: true } });
@@ -1942,7 +1967,15 @@ class Component extends DCLogic {
       onWorkspaceMenu: (e) => {
         e.stopPropagation();
         const slug = e.currentTarget.dataset.slug;
-        this.setState({ wsSlug: slug, panel: "workspace" }, () => this.loadPanel("workspace"));
+        // Opening settings for a different workspace switches the active workspace,
+        // so clear the stale thread selection (and its messages) to avoid sending
+        // into a thread that belongs to the previous workspace.
+        const switching = slug !== s.wsSlug;
+        this.setState({
+          wsSlug: slug,
+          ...(switching ? { threadSlug: null, messages: [] } : {}),
+          panel: "workspace"
+        }, () => this.loadPanel("workspace"));
       },
       onThreadClick: (e) => this.selectThread(e.currentTarget.dataset.slug, e.currentTarget.dataset.thread),
       onThreadRename: (e) => {
@@ -2407,7 +2440,7 @@ class Component extends DCLogic {
       this.setPanelData({ accounts: j.accounts || [] });
       this.mergeForm({
         cfgUrl: j.anythingllm_url || "", cfgHost: j.listen_host || "0.0.0.0",
-        cfgPort: String(j.listen_port || 5555), cfgMaster: j.master_api_key || "",
+        cfgPort: String(j.listen_port || 1555), cfgMaster: j.master_api_key || "",
         cfgSignup: !!j.allow_signup
       });
     } catch (e) { this.toast(e.message, "error"); }
