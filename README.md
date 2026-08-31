@@ -127,7 +127,7 @@ server {
 ### Main Chat Interface
 - **Workspaces sidebar** — Accordion-style navigation with search/filter
 - **Chat pane** — Full conversation history with copy/retry/edit functions
-- **Composer** — Drag-and-drop file attachments, voice dictation, streaming toggle
+- **Composer** — Drag-and-drop file attachments, voice dictation, streaming toggle, `/img` image generation
 - **Mobile responsive** — Sidebar becomes a drawer on small screens
 
 ### Workspace Panel (⚙️ button or 3-dots menu)
@@ -212,6 +212,12 @@ server {
 - Generate embeddings
 - View available models and vector stores
 
+### Image Generation Panel
+- Generate images from a text prompt
+- Edit existing images by attaching reference images
+- Inline preview, PNG download, provider notices
+- See "Image Generation" section for provider and model requirements
+
 ### Voice Panel
 - Transcribe audio/video files
 - Record voice messages directly
@@ -247,6 +253,52 @@ server {
 4. View raw JSON response
 5. Modify and re-run as needed
 
+## Image Generation
+
+Generate and edit images through your AnythingLLM instance's configured image provider, two ways: the `/img` chat command (like the desktop app) and the dedicated Image Gen panel.
+
+### `/img` Chat Command
+
+Type `/img` followed by a prompt in any chat composer:
+
+```
+/img a watercolor otter wearing a detective coat
+```
+
+- **No attachments** — generates a new image from the prompt
+- **Images attached** (drag-and-drop or paste) — the prompt becomes an *edit instruction* instead: `/img change the background to night` edits the attached images
+- The result renders inline in the conversation with a download button
+- While the provider works, the reply shows a "generating image…" placeholder — local models can take a few minutes per image
+
+**Session-only results:** the developer API has no way to write generated images into the server-side chat history, so `/img` bubbles disappear when the thread reloads (the prompt is never sent as a chat message, so nothing is recorded server-side either). The Image Gen panel keeps the most recent result.
+
+### Image Gen Panel
+
+The dedicated panel exposes the full `POST /v1/openai/images/generations` call:
+
+- **Prompt** (required) — describes the image, or the edit when references are attached
+- **Size** (optional) — e.g. `1024x1024`; omitted from the request when blank
+- **Reference images** — attach one or more images to switch the provider into edit mode
+- **Result card** — inline preview, download as PNG, plus any provider notice
+
+The console always requests `b64_json` so images render inline; URL responses are handled too. If the provider returns JSON with nothing renderable, the raw response is parked in the API Console panel instead of failing silently.
+
+### Provider Support
+
+Configure the provider in the AnythingLLM app under **Settings → AI Providers → Image Generation**. Editing support varies by provider:
+
+| Provider | Generation | Editing (reference images) |
+| --- | --- | --- |
+| OpenAI | ✅ | ✅ |
+| OpenRouter | ✅ | ✅ via chat completions with image inputs |
+| Lemonade | ✅ | ✅ model-dependent |
+| Ollama | ✅ | ❌ falls back to prompt-only generation with a notice |
+| LocalAI | ✅ | ⚠️ stock builds drop references and return a notice — [PR #6222](https://github.com/Mintplex-Labs/anything-llm/pull/6222) implements true editing via `ref_images` |
+
+Editing also requires an **edit-capable model**. Instruction-editing models such as **FLUX.1 Kontext [dev]** handle both generation and editing through a single model; generation-only models (e.g. plain FLUX.1-dev) return fresh generations even when references are attached.
+
+Whenever the provider can't perform an edit, it returns a **notice** with the result — displayed under the image in both the chat bubble and the panel, so you always know whether the edit actually happened.
+
 ## Security
 
 - **API keys never leave the server** — Browser only sees chat content
@@ -278,6 +330,8 @@ server {
 
 9. **Multi-user mode detection** — Endpoints are always attempted; 401 errors shown as banners if not in multi-user mode.
 
+10. **`/img` results are session-only** — The developer API cannot write generated images into server-side chat history. Chat image bubbles disappear when the thread reloads; the Image Gen panel keeps the latest result.
+
 ## Customization Ideas
 
 Want to extend this? Here are some suggestions:
@@ -285,6 +339,7 @@ Want to extend this? Here are some suggestions:
 - **Per-device session partitioning** — Separate workspace chat history per device
 - **Auto-refresh sidebar** — Poll or refresh on window focus
 - **Cmd-K switcher** — Quick jump between workspaces/threads
+- **Markdown renderer** — Full markdown support for assistant replies
 - **Invite links** — Generate full URLs from invite codes
 - **Per-workspace chat export** — Client-side CSV of current thread
 - **Systemd service** — Run as a background service with auto-start
