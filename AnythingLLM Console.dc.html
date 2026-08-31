@@ -227,6 +227,18 @@ Thoughts
 <div style="display:flex;align-items:center;gap:7px;color:var(--mu4);font-size:12px;margin-top:2px">
 <span style="width:6px;height:6px;border-radius:50%;background:var(--ac);animation:alc-pulse 1.1s infinite"></span>{{ m.pendingLabel }}</div>
 </sc-if>
+<sc-if value="{{ m.hasImage }}">
+<div style="margin-top:9px;max-width:420px">
+<div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">
+<span style="flex:1;font:500 10.5px Geist Mono,monospace;letter-spacing:.09em;text-transform:uppercase;color:var(--mu4)">generated image</span>
+<a href="{{ m.image }}" download="generated-image.png" style="flex:none;padding:5px 10px;border:1px solid rgba(77,163,245,.3);border-radius:7px;background:rgba(77,163,245,.08);color:var(--ac2);font:500 10px Geist Mono,monospace">download</a>
+</div>
+<img src="{{ m.image }}" style="display:block;max-width:100%;border-radius:8px;border:1px solid var(--bd)">
+<sc-if value="{{ m.hasImageNotice }}">
+<div style="font-size:11.5px;color:var(--mu);line-height:1.55;margin-top:7px">{{ m.imageNotice }}</div>
+</sc-if>
+</div>
+</sc-if>
 <sc-if value="{{ m.hasSources }}">
 <div style="margin-top:11px;display:flex;flex-wrap:wrap;gap:6px;align-items:center">
 <span style="font:400 10px Geist Mono,monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--mu5)">Cited</span>
@@ -712,6 +724,32 @@ Thoughts
 </sc-for>
 </sc-if>
 
+<sc-if value="{{ isImageGenPanel }}">
+<div style="background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px;margin-bottom:12px">
+<div style="font:500 10.5px Geist Mono,monospace;letter-spacing:.09em;text-transform:uppercase;color:var(--mu4);margin-bottom:11px">images/generations</div>
+<textarea data-field="imgPrompt" value="{{ f.imgPrompt }}" onChange="{{ onField }}" rows="3" placeholder="describe the image to generate" style="width:100%;background:var(--field);border:1px solid var(--bd2);border-radius:8px;padding:8px 10px;font-size:12.5px;resize:vertical"></textarea>
+<div style="display:grid;grid-template-columns:1fr 130px;gap:10px;margin-top:9px">
+<input data-field="imgSize" value="{{ f.imgSize }}" onChange="{{ onField }}" placeholder="size e.g. 1024x1024 (optional)" style="min-width:0;background:var(--field);border:1px solid var(--bd2);border-radius:8px;padding:8px 10px;font:400 12px Geist Mono,monospace">
+<button onClick="{{ runImageGen }}" style="border:0;border-radius:8px;background:var(--ac);color:var(--acink);font:600 11.5px Geist,sans-serif">{{ imgGenLabel }}</button>
+</div>
+<label style="display:flex;align-items:center;gap:8px;margin-top:11px;padding:11px;border:1px dashed var(--bd5);border-radius:10px;cursor:pointer;color:var(--mu);font-size:12px" style-hover="border-color:var(--ac);color:var(--tx2)">
+{{ imgRefsLabel }}<input type="file" accept="image/*" multiple onChange="{{ pickImgRefs }}" style="display:none"></label>
+<div style="font-size:11.5px;color:var(--mu4);line-height:1.55;margin-top:10px">Uses the image provider configured in AnythingLLM system settings. With reference images attached, the prompt describes the edit to apply instead.</div>
+</div>
+<sc-if value="{{ hasImgGen }}">
+<div style="background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px;margin-bottom:12px">
+<div style="display:flex;align-items:center;gap:8px;margin-bottom:11px">
+<span style="flex:1;font:500 10.5px Geist Mono,monospace;letter-spacing:.09em;text-transform:uppercase;color:var(--mu4)">result</span>
+<a href="{{ imgGen.src }}" download="generated-image.png" style="flex:none;padding:5px 10px;border:1px solid rgba(77,163,245,.3);border-radius:7px;background:rgba(77,163,245,.08);color:var(--ac2);font:500 10px Geist Mono,monospace">download</a>
+</div>
+<img src="{{ imgGen.src }}" style="display:block;max-width:100%;border-radius:8px;border:1px solid var(--bd)">
+<sc-if value="{{ hasImgGenNotice }}">
+<div style="font-size:11.5px;color:var(--mu);line-height:1.55;margin-top:9px">{{ imgGenNotice }}</div>
+</sc-if>
+</div>
+</sc-if>
+</sc-if>
+
 <sc-if value="{{ isTranscribePanel }}">
 <div style="background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px;margin-bottom:12px">
 <label style="display:flex;align-items:center;justify-content:center;gap:8px;padding:22px;border:1px dashed var(--bd5);border-radius:10px;cursor:pointer;color:var(--mu);font-size:12.5px" style-hover="border-color:var(--ac);color:var(--tx2)">
@@ -866,7 +904,7 @@ class Component extends DCLogic {
     mode: "chat", stream: true, listening: false,
     panel: null, drawer: false, narrow: false,
     toasts: [], confirm: null, prompt: null, files: [], docSel: [], filter: "", dragging: false, theme: "dark",
-    panelData: {}, panelForm: {}, panelBusy: false, panelTab: null, thinkOpen: {},
+    panelData: {}, panelForm: {}, panelBusy: false, panelTab: null, thinkOpen: {}, imgBusy: false,
     connectionError: null
   };
 
@@ -1458,6 +1496,19 @@ class Component extends DCLogic {
   async send() {
     const text = this.state.draft.trim();
     if (!text || this.state.sending) return;
+    // /img mirrors the desktop app's slash command. The developer chat API is
+    // text-only (its response schema has no image field), so the command is
+    // intercepted here and routed to the image generation endpoint instead of
+    // being handed to the LLM as a plain prompt.
+    if (/^\/img\b/i.test(text)) {
+      const prompt = text.replace(/^\/img\s*/i, "").trim();
+      // Attached images become image_references (edit mode); document
+      // attachments mean nothing to image generation and are dropped with a note.
+      const imgRefs = this.state.attachments.filter((a) => (a.mime || "").indexOf("image/") === 0);
+      if (this.state.attachments.length > imgRefs.length)
+        this.toast("Documents are ignored by /img — only image references are used", "error");
+      return this.sendImagePrompt(prompt, imgRefs);
+    }
     const ws = this.state.wsSlug;
     if (!ws) return this.toast("Pick a workspace first", "error");
     // Never fall back to /workspace/{slug} - that writes into the built-in default
@@ -1548,6 +1599,45 @@ class Component extends DCLogic {
     if (!this.state.demo) this.refreshThreads(ws);
   }
 
+  // /img handler: with no references this is a generation; with attached images
+  // it is an edit (image_references), the same routing the desktop app does.
+  // The image renders as a chat bubble. NOTE: it is display-only — the developer
+  // API cannot write the image into the server-side chat history, so the bubble
+  // disappears if the thread history is reloaded (switching threads and back).
+  async sendImagePrompt(prompt, refs) {
+    if (!prompt) return this.toast("Usage: /img describe the image — attach images to edit them", "error");
+    if (!this.state.wsSlug) return this.toast("Pick a workspace first", "error");
+    if (this.state.demo) return this.toast("Preview mode: no server to send to", "error");
+    // Attachments are stored as data URLs; the multipart endpoint wants File blobs.
+    const files = await Promise.all((refs || []).map(async (a) => {
+      const blob = await (await fetch(a.contentString)).blob();
+      return new File([blob], a.name, { type: a.mime });
+    }));
+    const turn = Date.now() + "-" + (this._turn = (this._turn || 0) + 1);
+    const userMsg = { id: "u" + turn, role: "user", content: "/img " + prompt, sources: [], outputs: [] };
+    const botMsg = { id: "a" + turn, role: "assistant", content: "", sources: [], outputs: [], pending: true, imagePending: true };
+    this.setState((st) => ({ messages: st.messages.concat([userMsg, botMsg]), draft: "", attachments: [], sending: true }));
+    const t0 = Date.now();
+    // Functional form: patch the placeholder by id so a mid-flight history reload
+    // cannot make this write to the wrong message list.
+    const patch = (fields) => this.setState((st) => ({
+      messages: st.messages.map((m) => (m.id === botMsg.id ? Object.assign({}, m, fields) : m))
+    }));
+    try {
+      const r = await this.generateImage(prompt, { refs: files });
+      if (r.src) patch({ image: r.src, imageNotice: r.notice, pending: false, elapsed: Date.now() - t0 });
+      else {
+        // Provider returned JSON but nothing renderable — park it in the API panel.
+        this.setPanelData({ rawStatus: "200 · images/generations · no image in response", rawOk: true, rawResponse: r.rawResponse });
+        patch({ error: "Provider returned no image — raw response is in the API panel", pending: false });
+      }
+    } catch (e) {
+      patch({ error: e.message, pending: false });
+    } finally {
+      this.setState({ sending: false });
+    }
+  }
+
   abortSend() { if (this.abort) this.abort.abort(); }
 
   async onFiles(e) {
@@ -1610,7 +1700,7 @@ class Component extends DCLogic {
         try {
           const form = new FormData();
           form.append("audio", blob, "prompt.webm");
-          const j = await this.api("/transcribe", { method: "POST", form });
+          const j = await this.api("/transcription/transcribe", { method: "POST", form });
           const text = this.transcriptText(j);
           if (!text) throw new Error("No transcript returned");
           this.setState((st) => ({ draft: (st.draft + " " + text).trim() }));
@@ -1856,13 +1946,15 @@ class Component extends DCLogic {
       hasThinking: !!think.thinking, thinkOpen: !!s.thinkOpen[m.id],
       thinkCaret: s.thinkOpen[m.id] ? "rotate(90deg)" : "rotate(0deg)",
       thinkRendered: think.thinking ? this.renderContent(think.thinking, m.id + "-think") : null,
-      pending: !!m.pending && !think.content, pendingLabel: s.stream ? "streaming from Ollama…" : "waiting for reply…",
+      pending: !!m.pending && !think.content, pendingLabel: m.imagePending ? "generating image…" : (s.stream ? "streaming from Ollama…" : "waiting for reply…"),
+      image: m.image || null, hasImage: !!m.image,
+      imageNotice: m.imageNotice || "", hasImageNotice: !!m.imageNotice,
       sources: (m.sources || []).map((x) => {
         const title = x.title || (x.metadata && x.metadata.title) || "source";
         return { title, chunk: (x.chunk || x.text || "").slice(0, 400), iconPath: this.sourceIcon(title) };
       }),
       hasSources: !!(m.sources || []).length,
-      outputs: (m.outputs || []).map((o) => ({ name: o.name || o.storageFilename, href: "/api/v1/document/download/" + encodeURIComponent(o.storageFilename || o.name) })),
+      outputs: (m.outputs || []).map((o) => ({ name: o.name || o.storageFilename, href: "/api/v1/document/generated-files/" + encodeURIComponent(o.storageFilename || o.name) })),
       hasOutputs: !!(m.outputs || []).length,
       error: m.error || null,
       canCopy: !!String(think.content || "").trim(),
@@ -1887,6 +1979,7 @@ class Component extends DCLogic {
       ["search", "Search", "Vector similarity search in a workspace"],
       ["embeds", "Embeds", "Embeddable chat widgets"],
       ["openai", "OpenAI", "OpenAI-compatible endpoints"],
+      ["imagegen", "Image Gen", "Generate or edit images via the configured image provider"],
       ["transcribe", "Voice", "Transcribe audio or video"],
       ["files", "Files", "Files @agent skills generated in chat"],
       ["system", "System", "System settings, vectors, exports"],
@@ -1906,8 +1999,9 @@ class Component extends DCLogic {
       search: ["Vector search", "POST /v1/workspace/{slug}/vector-search"],
       embeds: ["Embed widgets", "/v1/embed"],
       openai: ["OpenAI-compatible", "/v1/openai/*"],
-      transcribe: ["Transcription", "POST /v1/transcribe"],
-      files: ["Agent files", "GET /v1/document/download/{filename}"],
+      imagegen: ["Image generation", "POST /v1/openai/images/generations"],
+      transcribe: ["Transcription", "POST /v1/transcription/transcribe"],
+      files: ["Agent files", "GET /v1/document/generated-files/{filename}"],
       system: ["System", "/v1/system"],
       admin: ["Admin", "/v1/admin · /v1/users"],
       raw: ["API console", "any endpoint, any payload"],
@@ -2038,7 +2132,7 @@ class Component extends DCLogic {
         if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); this.send(); }
       },
       composerPlaceholder: th ? "Message " + th.name + "…" : (ws ? "Message " + ws.name + "…" : "Select a workspace first"),
-      composerHint: (s.stream ? "streaming" : "blocking") + " · enter sends, shift+enter newlines",
+      composerHint: (s.stream ? "streaming" : "blocking") + " · enter sends, shift+enter newlines · /img generates an image (attach images to edit)",
       modes, onMode: (e) => { const mode = e.currentTarget.dataset.mode; this.keep("mode", mode); this.setState({ mode }); },
       streamLabel: s.stream ? "Stream on" : "Stream off",
       streamBtnStyle: "padding:6px 11px;border:1px solid " + (s.stream ? "rgba(77,163,245,.35)" : "var(--bd)") + ";border-radius:8px;background:" + (s.stream ? "rgba(77,163,245,.1)" : "transparent") + ";color:" + (s.stream ? "var(--ac2)" : "var(--mu3)") + ";font:500 11px Geist Mono,monospace",
@@ -2147,6 +2241,7 @@ class Component extends DCLogic {
       embedWs: ws.slug || "", embedMode: "chat", embedDomains: "", embedPerDay: "", embedPerSession: "",
       embedModelOverride: false, embedTempOverride: false, embedPromptOverride: false,
       oaiModel: ws.slug || "", oaiTemp: 0.7, oaiSystem: "", oaiUser: "", oaiEmbedInput: "",
+      imgPrompt: "", imgSize: "",
       rawEndpoint: "0", rawMethod: "GET", rawPath: "/v1/workspaces", rawBody: "",
       cfgUrl: "", cfgHost: "0.0.0.0", cfgPort: "1555", cfgMaster: "", cfgSignup: true, myKey: "", fileName: ""
     };
@@ -2340,11 +2435,69 @@ class Component extends DCLogic {
     form.append("audio", this.pendingAudio, this.pendingAudio.name);
     try {
       this.toast("Transcribing " + this.pendingAudio.name + "… this can take a while");
-      const j = await this.api("/transcribe", { method: "POST", form });
+      const j = await this.api("/transcription/transcribe", { method: "POST", form });
       const text = this.transcriptText(j);
       this.setPanelData({ transcript: text || JSON.stringify(j, null, 2) });
       this.toast("Transcribed");
     } catch (e) { this.toast(e.message, "error"); }
+  }
+
+  // ---------------------------------------------------------------- image generation
+  // POST /v1/openai/images/generations — multipart: prompt (required), optional
+  // size and image_references (which switches the provider to edit mode).
+  // Always requests b64_json so the result can be shown inline as a data URL.
+  // Shared by the Image Gen panel and the /img chat command. Returns
+  // { src, notice } on success, { rawResponse } when the provider returned no
+  // image (nothing recognizable to render), and throws on request failure.
+  async generateImage(prompt, opts = {}) {
+    const form = new FormData();
+    form.append("prompt", prompt);
+    if ((opts.size || "").trim()) form.append("size", opts.size.trim());
+    form.append("response_format", "b64_json");
+    (opts.refs || []).forEach((file) => form.append("image_references", file, file.name));
+    const j = await this.api("/openai/images/generations", { method: "POST", form });
+    if (j && j.success === false) throw new Error(j.error || "Generation failed");
+    // Response shape varies by provider, so probe the common spots for the image.
+    const d0 = (Array.isArray(j && j.data) && j.data[0]) || {};
+    const b64 = (typeof d0.b64_json === "string" && d0.b64_json)
+      || (j && typeof j.b64_json === "string" && j.b64_json)
+      || (j && typeof j.image === "string" && j.image)
+      || (j && typeof j.base64 === "string" && j.base64)
+      || (j && typeof j.data === "string" && j.data)
+      || null;
+    const url = (typeof d0.url === "string" && d0.url) || (j && typeof j.url === "string" && j.url) || null;
+    if (!b64 && !url) return { rawResponse: JSON.stringify(j, null, 2).slice(0, 40000) };
+    const src = b64 ? "data:image/png;base64," + b64.replace(/^data:image\/[a-z+]+;base64,/i, "") : url;
+    return { src, notice: (j && j.notice) || "" };
+  }
+
+  async runImageGen() {
+    if (this.state.imgBusy) return;
+    const f = this.form();
+    const prompt = (f.imgPrompt || "").trim();
+    if (!prompt) return this.toast("Describe the image first", "error");
+    if (this.state.demo) return this.toast("Preview mode: no server to send to", "error");
+    this.setState({ imgBusy: true });
+    try {
+      const r = await this.generateImage(prompt, { size: f.imgSize, refs: this.pendingImgRefs || [] });
+      if (r.src) {
+        this.setPanelData({ imgGen: { src: r.src, notice: r.notice } });
+        this.toast("Image generated");
+      } else {
+        // No image found — show whatever the provider did return instead of failing silently.
+        this.setPanelData({
+          imgGen: null,
+          rawStatus: "200 · images/generations · no image in response", rawOk: true,
+          rawResponse: r.rawResponse
+        });
+        this.setState({ panel: "raw" });
+        this.toast("Provider returned no image — raw response shown in the API panel", "error");
+      }
+    } catch (e) {
+      this.toast(e.message, "error");
+    } finally {
+      this.setState({ imgBusy: false });
+    }
   }
 
   endpointCatalog() {
@@ -2381,7 +2534,7 @@ class Component extends DCLogic {
       E("Documents", "POST", "/v1/document/create-folder", '{\n  "name": "new-folder"\n}'),
       E("Documents", "DELETE", "/v1/document/remove-folder", '{\n  "name": "my-folder"\n}'),
       E("Documents", "POST", "/v1/document/move-files", '{\n  "files": [\n    { "from": "custom-documents/a.json", "to": "folder/a.json" }\n  ]\n}'),
-      E("Documents", "GET", "/v1/document/download/{filename}"),
+      E("Documents", "GET", "/v1/document/generated-files/{filename}"),
       E("System", "GET", "/v1/system"),
       E("System", "GET", "/v1/system/vector-count"),
       E("System", "GET", "/v1/system/env-dump"),
@@ -2391,8 +2544,8 @@ class Component extends DCLogic {
       E("Admin", "GET", "/v1/admin/is-multi-user-mode"),
       E("Admin", "GET", "/v1/admin/users"),
       E("Admin", "POST", "/v1/admin/users/new", '{\n  "username": "sample-sam",\n  "password": "hunter2",\n  "role": "default"\n}'),
-      E("Admin", "POST", "/v1/admin/user/{id}", '{\n  "username": "sample-sam",\n  "password": "hunter2",\n  "role": "default",\n  "suspended": 0\n}'),
-      E("Admin", "DELETE", "/v1/admin/user/{id}"),
+      E("Admin", "POST", "/v1/admin/users/{id}", '{\n  "username": "sample-sam",\n  "password": "hunter2",\n  "role": "default",\n  "suspended": 0\n}'),
+      E("Admin", "DELETE", "/v1/admin/users/{id}"),
       E("Admin", "GET", "/v1/admin/invites"),
       E("Admin", "POST", "/v1/admin/invite/new", '{\n  "workspaceIds": [1, 2]\n}'),
       E("Admin", "DELETE", "/v1/admin/invite/{id}"),
@@ -2405,6 +2558,7 @@ class Component extends DCLogic {
       E("OpenAI", "GET", "/v1/openai/models"),
       E("OpenAI", "GET", "/v1/openai/vector_stores"),
       E("OpenAI", "POST", "/v1/openai/chat/completions", '{\n  "messages": [\n    { "role": "user", "content": "What is AnythingLLM?" }\n  ],\n  "model": "{slug}",\n  "stream": false,\n  "temperature": 0.7\n}'),
+      E("OpenAI", "POST", "/v1/openai/images/generations", "multipart: prompt (required), size, image_references, response_format"),
       E("OpenAI", "POST", "/v1/openai/embeddings", '{\n  "input": ["First string", "Second string"],\n  "model": null\n}'),
       E("Embed", "GET", "/v1/embed"),
       E("Embed", "POST", "/v1/embed/new", '{\n  "workspace_slug": "{slug}",\n  "chat_mode": "chat",\n  "allowlist_domains": ["example.com"],\n  "max_chats_per_day": 100,\n  "max_chats_per_session": 10\n}'),
@@ -2412,7 +2566,7 @@ class Component extends DCLogic {
       E("Embed", "DELETE", "/v1/embed/{embedUuid}"),
       E("Embed", "GET", "/v1/embed/{embedUuid}/chats"),
       E("Embed", "GET", "/v1/embed/{embedUuid}/chats/{sessionUuid}"),
-      E("Transcription", "POST", "/v1/transcribe", "multipart: use the Voice panel")
+      E("Transcription", "POST", "/v1/transcription/transcribe", "multipart: use the Voice panel")
     ];
     return this._eps;
   }
@@ -2506,7 +2660,7 @@ class Component extends DCLogic {
       this.toast(files.length + " document(s) moved to " + dest);
       this.loadPanel("documents");
     } else if (p.kind === "userPassword") {
-      await this.api("/admin/user/" + p.target, { method: "POST", body: { password: value } });
+      await this.api("/admin/users/" + p.target, { method: "POST", body: { password: value } });
       this.toast("Password updated");
     }
   }
@@ -2526,7 +2680,7 @@ class Component extends DCLogic {
       const j = await this.api("/system/update-env", { method: "POST", body: c.target });
       this.toast(j && j.error ? String(j.error) : "Setting applied"); this.loadSystem();
     } else if (c.kind === "deleteUser") {
-      await this.api("/admin/user/" + c.target, { method: "DELETE" });
+      await this.api("/admin/users/" + c.target, { method: "DELETE" });
       this.toast("User deleted"); this.loadAdmin();
     } else if (c.kind === "deleteInvite") {
       await this.api("/admin/invite/" + c.target, { method: "DELETE" });
@@ -2599,11 +2753,12 @@ class Component extends DCLogic {
       isSearchPanel: s.panel === "search", isSystemPanel: s.panel === "system",
       isAdminPanel: s.panel === "admin", isEmbedsPanel: s.panel === "embeds",
       isOpenAiPanel: s.panel === "openai", isTranscribePanel: s.panel === "transcribe",
+      isImageGenPanel: s.panel === "imagegen",
       isRawPanel: s.panel === "raw", isSettingsPanel: s.panel === "settings",
       isFilesPanel: s.panel === "files",
       fileRows: s.files.map((x) => ({
         file: x.file, name: x.name,
-        href: "/api/v1/document/download/" + encodeURIComponent(x.file),
+        href: "/api/v1/document/generated-files/" + encodeURIComponent(x.file),
         meta: [x.ws, x.thread, new Date(x.at).toLocaleString()].filter(Boolean).join(" · ")
       })),
       noFiles: !s.files.length, hasFiles: !!s.files.length,
@@ -2617,7 +2772,7 @@ class Component extends DCLogic {
         const name = (this.form().fileName || "").trim();
         if (!name) return this.toast("Enter the storage filename from the chat response", "error");
         if (s.demo) return this.toast("Preview mode: no server to download from", "error");
-        window.open("/api/v1/document/download/" + encodeURIComponent(name), "_blank");
+        window.open("/api/v1/document/generated-files/" + encodeURIComponent(name), "_blank");
       },
       panelNotice: s.demo
         ? "Preview mode — no console server is answering, so the panels show canned data. Run server.py and sign in for live calls."
@@ -2768,10 +2923,10 @@ class Component extends DCLogic {
       },
       suspendUser: async (e) => {
         const d = e.currentTarget.dataset;
-        try { await this.api("/admin/user/" + d.id, { method: "POST", body: { suspended: d.suspend === "1" ? 1 : 0 } }); this.loadAdmin(); this.toast("Updated"); }
+        try { await this.api("/admin/users/" + d.id, { method: "POST", body: { suspended: d.suspend === "1" ? 1 : 0 } }); this.loadAdmin(); this.toast("Updated"); }
         catch (err) { this.toast(err.message, "error"); }
       },
-      editUser: (e) => this.askPrompt("userPassword", "New password", "POST /v1/admin/user/" + e.currentTarget.dataset.id, "", e.currentTarget.dataset.id),
+      editUser: (e) => this.askPrompt("userPassword", "New password", "POST /v1/admin/users/" + e.currentTarget.dataset.id, "", e.currentTarget.dataset.id),
       deleteUser: (e) => this.askConfirm("deleteUser", "Delete " + e.currentTarget.dataset.name + "?", "The user is removed from AnythingLLM.", "Delete user", e.currentTarget.dataset.id),
       invites: (pd.invites || []).map((i) => ({ id: i.id, code: i.code, status: i.status + (i.claimedBy ? " · claimed" : "") })),
       noInvites: !(pd.invites || []).length,
@@ -2894,6 +3049,18 @@ class Component extends DCLogic {
           this.setState({ panel: "raw" });
         } catch (e) { this.toast(e.message, "error"); }
       },
+
+      // ---- image generation (POST /v1/openai/images/generations)
+      imgGenLabel: s.imgBusy ? "Generating…" : "Generate image",
+      imgRefsLabel: (this.pendingImgRefs || []).length
+        ? (this.pendingImgRefs || []).length + " reference image(s) attached — click to change"
+        : "Attach reference image(s) to edit an existing image (optional)",
+      imgGen: pd.imgGen || {},
+      hasImgGen: !!(pd.imgGen && pd.imgGen.src),
+      imgGenNotice: (pd.imgGen && pd.imgGen.notice) || "",
+      hasImgGenNotice: !!((pd.imgGen || {}).notice),
+      pickImgRefs: (e) => { this.pendingImgRefs = Array.from(e.target.files || []); this.forceUpdate(); },
+      runImageGen: () => this.runImageGen(),
 
       transcribeFileLabel: this.pendingAudio ? this.pendingAudio.name : "Choose an audio or video file",
       pickAudio: (e) => { this.pendingAudio = e.target.files[0]; this.forceUpdate(); },
