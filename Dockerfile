@@ -13,7 +13,7 @@ RUN pip install --no-cache-dir flask requests waitress cheroot \
     && mkdir -p /data \
     && chown appuser:appuser /data
 
-COPY --chown=appuser:appuser server.py support.js sw.js manifest.webmanifest ./
+COPY --chown=appuser:appuser server.py support.js sw.js manifest.webmanifest icon-192.png icon-512.png ./
 COPY --chown=appuser:appuser ["AnythingLLM Console.dc.html", "./"]
 
 USER appuser
