@@ -735,6 +735,9 @@ Thoughts
 <label style="display:flex;align-items:center;gap:8px;margin-top:11px;padding:11px;border:1px dashed var(--bd5);border-radius:10px;cursor:pointer;color:var(--mu);font-size:12px" style-hover="border-color:var(--ac);color:var(--tx2)">
 {{ imgRefsLabel }}<input type="file" accept="image/*" multiple onChange="{{ pickImgRefs }}" style="display:none"></label>
 <div style="font-size:11.5px;color:var(--mu4);line-height:1.55;margin-top:10px">Uses the image provider configured in AnythingLLM system settings. With reference images attached, the prompt describes the edit to apply instead.</div>
+<sc-if value="{{ hasImgModelNote }}">
+<div style="font-size:11.5px;color:var(--mu);line-height:1.55;margin-top:7px">{{ imgModelNote }}</div>
+</sc-if>
 </div>
 <sc-if value="{{ hasImgGen }}">
 <div style="background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px;margin-bottom:12px">
@@ -1486,6 +1489,8 @@ class Component extends DCLogic {
         this.setState({ threadSlug: null, messages: [], panel: null });
         await this.loadWorkspaces();
         this.toast("Deleted " + threads.length + " thread(s)");
+      } else if (c.kind === "editUnsupported") {
+        // Informational dialog — nothing to accept or run.
       } else if (this.acceptPanelConfirm) {
         await this.acceptPanelConfirm(c);
       }
@@ -1608,6 +1613,16 @@ class Component extends DCLogic {
     if (!prompt) return this.toast("Usage: /img describe the image — attach images to edit them", "error");
     if (!this.state.wsSlug) return this.toast("Pick a workspace first", "error");
     if (this.state.demo) return this.toast("Preview mode: no server to send to", "error");
+    // Attached images mean an edit request: refuse early when the configured
+    // model can't accept them. Nothing is consumed on this path — the draft
+    // and attachments stay in the composer so the user can adjust.
+    if ((refs || []).length) {
+      const reason = this.imageEditBlockReason(await this.imageGenInfo());
+      if (reason) {
+        this.askConfirm("editUnsupported", "Image editing is not available", reason, "Got it");
+        return;
+      }
+    }
     // Attachments are stored as data URLs; the multipart endpoint wants File blobs.
     const files = await Promise.all((refs || []).map(async (a) => {
       const blob = await (await fetch(a.contentString)).blob();
@@ -2275,6 +2290,8 @@ class Component extends DCLogic {
         this.setPanelData({ embeds: j.embeds || [], embedChats: [] });
       } else if (key === "openai") {
         this.loadOaiModels();
+      } else if (key === "imagegen") {
+        this.loadImageGenInfo();
       } else if (key === "settings") {
         this.loadConfig();
       } else if (key === "search") {
@@ -2449,6 +2466,58 @@ class Component extends DCLogic {
   // Shared by the Image Gen panel and the /img chat command. Returns
   // { src, notice } on success, { rawResponse } when the provider returned no
   // image (nothing recognizable to render), and throws on request failure.
+
+  // Capability probe. LocalAI exposes no per-model capability metadata, and
+  // sd.cpp logs "EDIT mode" for ANY model once reference images arrive, so the
+  // only reliable signal is the image provider/model AnythingLLM is configured
+  // with (GET /v1/system -> settings; keys IMAGE_GEN_PROVIDER and
+  // IMAGE_GEN_MODEL_PREF). Setups that are positively known to be unsupported
+  // are blocked with a dialog before a request is sent; anything unknown is
+  // allowed through and left to the server-side error.
+  async imageGenInfo() {
+    if (this._imgGenInfo && Date.now() - this._imgGenInfo.at < 60000) return this._imgGenInfo;
+    let provider = null, model = null;
+    try {
+      const j = await this.api("/system");
+      const st = (j && j.settings) || {};
+      // Key casing varies between AnythingLLM versions, so compare normalized.
+      const norm = (k) => String(k).toUpperCase().replace(/[^A-Z0-9]/g, "");
+      for (const k of Object.keys(st)) {
+        if (norm(k) === "IMAGEGENPROVIDER") provider = String(st[k] || "").toLowerCase() || null;
+        if (norm(k) === "IMAGEGENMODELPREF") model = String(st[k] || "") || null;
+      }
+    } catch (e) { /* unreadable settings -> allow; the server error still covers it */ }
+    this._imgGenInfo = { provider, model, at: Date.now() };
+    return this._imgGenInfo;
+  }
+
+  // Mirrors REF_IMAGE_SUPPORTED_MODELS in AnythingLLM's LocalAI image provider
+  // (merged upstream in PR #6222): the server throws on edit requests for any
+  // LocalAI model not on this list, and always throws for Ollama. Keep this in
+  // sync with the server — otherwise edit requests the console allows will
+  // just hit the server's error instead of this friendlier pre-flight dialog.
+  localAiRefModels() {
+    return ["flux.1-kontext-dev"];
+  }
+
+  imageEditBlockReason(info) {
+    if (!info) return null;
+    if (info.provider === "ollama")
+      return "Ollama image generation does not support reference images. Remove the attached reference images and send a text-only prompt, or switch to an image generation provider that supports image editing.";
+    if (info.provider === "localai" && info.model && this.localAiRefModels().indexOf(info.model) === -1)
+      return "LocalAI only supports reference images on the " + this.localAiRefModels().join(", ") + " model — the configured model (" + info.model + ") will ignore them. Remove the attached reference images and send a text-only prompt, or switch the LocalAI image model in AnythingLLM (Settings → AI Providers → Image Generation).";
+    return null;
+  }
+
+  loadImageGenInfo() {
+    this.imageGenInfo().then((info) => this.setPanelData({
+      imgGenInfo: Object.assign({}, info, {
+        blockReason: this.imageEditBlockReason(info),
+        canEdit: info.provider === "localai" && this.localAiRefModels().indexOf(info.model) !== -1
+      })
+    }));
+  }
+
   async generateImage(prompt, opts = {}) {
     const form = new FormData();
     form.append("prompt", prompt);
@@ -2477,6 +2546,13 @@ class Component extends DCLogic {
     const prompt = (f.imgPrompt || "").trim();
     if (!prompt) return this.toast("Describe the image first", "error");
     if (this.state.demo) return this.toast("Preview mode: no server to send to", "error");
+    // Reference images attached: refuse early when the configured model can't
+    // accept them — the server would reject the request anyway, so this saves
+    // the round-trip and explains how to fix it.
+    if ((this.pendingImgRefs || []).length) {
+      const reason = this.imageEditBlockReason(await this.imageGenInfo());
+      if (reason) return this.askConfirm("editUnsupported", "Image editing is not available", reason, "Got it");
+    }
     this.setState({ imgBusy: true });
     try {
       const r = await this.generateImage(prompt, { size: f.imgSize, refs: this.pendingImgRefs || [] });
@@ -3061,6 +3137,12 @@ class Component extends DCLogic {
       hasImgGenNotice: !!((pd.imgGen || {}).notice),
       pickImgRefs: (e) => { this.pendingImgRefs = Array.from(e.target.files || []); this.forceUpdate(); },
       runImageGen: () => this.runImageGen(),
+      imgModelNote: (pd.imgGenInfo && pd.imgGenInfo.model)
+        ? "Image model: " + pd.imgGenInfo.model + (pd.imgGenInfo.provider ? " · provider: " + pd.imgGenInfo.provider : "")
+          + (pd.imgGenInfo.blockReason ? " — cannot edit; requests with reference images are rejected"
+             : (pd.imgGenInfo.canEdit ? " — edit-capable" : ""))
+        : "",
+      hasImgModelNote: !!(pd.imgGenInfo && pd.imgGenInfo.model),
 
       transcribeFileLabel: this.pendingAudio ? this.pendingAudio.name : "Choose an audio or video file",
       pickAudio: (e) => { this.pendingAudio = e.target.files[0]; this.forceUpdate(); },

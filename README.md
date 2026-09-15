@@ -215,7 +215,7 @@ server {
 ### Image Generation Panel
 - Generate images from a text prompt
 - Edit existing images by attaching reference images
-- Inline preview, PNG download, provider notices
+- Inline preview, PNG download, edit-capability check
 - See "Image Generation" section for provider and model requirements
 
 ### Voice Panel
@@ -269,6 +269,7 @@ Type `/img` followed by a prompt in any chat composer:
 - **Images attached** (drag-and-drop or paste) — the prompt becomes an *edit instruction* instead: `/img change the background to night` edits the attached images
 - The result renders inline in the conversation with a download button
 - While the provider works, the reply shows a "generating image…" placeholder — local models can take a few minutes per image
+- **Edit-capability check** — if the console can tell the configured model can't edit (Ollama, or a LocalAI model other than `flux.1-kontext-dev`), a dialog stops the request before anything is sent; your draft and attachments stay in the composer
 
 **Session-only results:** the developer API has no way to write generated images into the server-side chat history, so `/img` bubbles disappear when the thread reloads (the prompt is never sent as a chat message, so nothing is recorded server-side either). The Image Gen panel keeps the most recent result.
 
@@ -279,7 +280,8 @@ The dedicated panel exposes the full `POST /v1/openai/images/generations` call:
 - **Prompt** (required) — describes the image, or the edit when references are attached
 - **Size** (optional) — e.g. `1024x1024`; omitted from the request when blank
 - **Reference images** — attach one or more images to switch the provider into edit mode
-- **Result card** — inline preview, download as PNG, plus any provider notice
+- **Result card** — inline preview and download as PNG
+- **Model check** — shows the configured image model and whether it can edit; edit attempts that are known to fail are stopped with a dialog instead of a wasted generation
 
 The console always requests `b64_json` so images render inline; URL responses are handled too. If the provider returns JSON with nothing renderable, the raw response is parked in the API Console panel instead of failing silently.
 
@@ -292,12 +294,22 @@ Configure the provider in the AnythingLLM app under **Settings → AI Providers 
 | OpenAI | ✅ | ✅ |
 | OpenRouter | ✅ | ✅ via chat completions with image inputs |
 | Lemonade | ✅ | ✅ model-dependent |
-| Ollama | ✅ | ❌ falls back to prompt-only generation with a notice |
-| LocalAI | ✅ | ⚠️ stock builds drop references and return a notice — [PR #6222](https://github.com/Mintplex-Labs/anything-llm/pull/6222) implements true editing via `ref_images` |
+| Ollama | ✅ | ❌ requests with reference images fail with a descriptive error |
+| LocalAI | ✅ | ✅ via `ref_images` on `flux.1-kontext-dev` only — other models fail with a descriptive error ([PR #6222](https://github.com/Mintplex-Labs/anything-llm/pull/6222), merged Aug 2026) |
 
-Editing also requires an **edit-capable model**. Instruction-editing models such as **FLUX.1 Kontext [dev]** handle both generation and editing through a single model; generation-only models (e.g. plain FLUX.1-dev) return fresh generations even when references are attached.
+Editing also requires an **edit-capable model**. AnythingLLM keeps a list of reference-capable LocalAI models (`REF_IMAGE_SUPPORTED_MODELS`, currently just `flux.1-kontext-dev`) and fails edit requests for anything else with a descriptive error — generation-only models (e.g. plain FLUX.1-dev) would otherwise silently return fresh generations even with references attached. This shipped in [PR #6222](https://github.com/Mintplex-Labs/anything-llm/pull/6222) (merged August 2026); older AnythingLLM builds silently drop references instead, so edit requests that unexpectedly "succeed" with a fresh image are a sign your instance needs updating.
 
-Whenever the provider can't perform an edit, it returns a **notice** with the result — displayed under the image in both the chat bubble and the panel, so you always know whether the edit actually happened.
+When the provider can't accept reference images, the request fails with a descriptive error instead of silently ignoring them — upstream AnythingLLM throws rather than wasting GPU time on a doomed generation. The console's pre-flight dialog usually catches these cases before the request is even sent.
+
+### Edit Capability Check
+
+Rather than sending a doomed edit request and waiting minutes for a degraded result, the console reads the configured image provider and model from `GET /v1/system` whenever reference images are attached:
+
+- **Ollama** — always blocked with a dialog (the provider never accepts references; the server rejects the request too)
+- **LocalAI** — only `flux.1-kontext-dev` is allowed through, mirroring AnythingLLM's `REF_IMAGE_SUPPORTED_MODELS` list; everything else is blocked
+- **Everything else** — allowed through; if the server still rejects the request, its error message surfaces through the console's usual error paths
+
+The check mirrors the server-side capability guard merged upstream in [PR #6222](https://github.com/Mintplex-Labs/anything-llm/pull/6222), so both layers agree on what counts as edit-capable. It stays deliberately conservative: an unreadable or unrecognized configuration never locks you out of a legitimate edit.
 
 ## Security
 
