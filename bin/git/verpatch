@@ -1,0 +1,20 @@
+# Read the current version from version.txt
+CURRENT_VERSION=$(cat version.txt)
+
+# Bump the last component, supporting X.X and X.X.X formats
+if [[ $CURRENT_VERSION =~ ^[0-9]+\.[0-9]+$ ]]; then
+  major=$(echo $CURRENT_VERSION | cut -d '.' -f1)
+  minor=$(echo $CURRENT_VERSION | cut -d '.' -f2)
+  NEW_RELEASE_TAG="${major}.$((minor + 1))"
+elif [[ $CURRENT_VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  major=$(echo $CURRENT_VERSION | cut -d '.' -f1)
+  minor=$(echo $CURRENT_VERSION | cut -d '.' -f2)
+  patch=$(echo $CURRENT_VERSION | cut -d '.' -f3)
+  NEW_RELEASE_TAG="${major}.${minor}.$((patch + 1))"
+else
+  # Fallback for plain integer versions
+  NEW_RELEASE_TAG="$(( ${CURRENT_VERSION} + 1 ))"
+fi
+
+# Write the new version back to version.txt
+echo $NEW_RELEASE_TAG > version.txt
