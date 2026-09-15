@@ -1,6 +1,6 @@
 services:
   anythingllm-webui:
-    image: "ghcr.io/jr-k/anythingllm-webui:latest"
+    image: "ghcr.io/TheGoodMorty/anythingllm-webui:latest"
     pull_policy: always
     expose:
       - "1555"
