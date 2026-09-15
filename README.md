@@ -21,6 +21,27 @@ Then open:
 
 Create your first account with your AnythingLLM API key. The server validates it against your instance before creating the account.
 
+## Docker
+
+A container image is built automatically from this repository and published to GHCR.
+
+Run the published image:
+
+```bash
+docker compose -f docker-compose.prod.yml up -d
+```
+
+Or build it locally:
+
+```bash
+docker compose up -d --build
+```
+
+- The console listens on port `1555` — the `docker-compose.yml` variant publishes it to the host, the `prod` variant only exposes it for a reverse proxy.
+- `ANYTHINGLLM_URL` tells the container where to reach your AnythingLLM instance — `http://host.docker.internal:3001` when AnythingLLM runs on the host machine (see `.env.example`).
+- `config.json` and `users.json` live in the `anythingllm-webui-data` volume, so accounts and settings survive rebuilds.
+- To publish a new image version, bump the version in `version.txt` and push — the GitHub Actions workflow builds and publishes it automatically.
+
 ## What It Does
 
 This console:
