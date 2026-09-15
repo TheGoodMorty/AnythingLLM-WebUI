@@ -109,8 +109,10 @@ from flask import Flask, request, session, jsonify, Response, send_from_director
 # ============================================================================
 
 ROOT = os.path.dirname(os.path.abspath(__file__))  # Directory containing server.py
-CONFIG_PATH = os.path.join(ROOT, "config.json")     # Server configuration file
-USERS_PATH = os.path.join(ROOT, "users.json")       # User accounts database
+DATA_DIR = os.path.abspath(os.environ.get("DATA_DIR", ROOT))
+os.makedirs(DATA_DIR, exist_ok=True)
+CONFIG_PATH = os.path.join(DATA_DIR, "config.json")  # Server configuration file
+USERS_PATH = os.path.join(DATA_DIR, "users.json")    # User accounts database
 UI_FILE = "AnythingLLM Console.dc.html"             # Main HTML template
 
 # Default configuration - used on first run or if config.json is missing/corrupt
@@ -171,6 +173,19 @@ def load_config():
                 cfg.update(json.load(fh))
         except Exception as exc:  # corrupt file - keep serving with defaults
             print(f"[config] could not read config.json ({exc}); using defaults")
+
+    # Environment variables take precedence, which makes container deployments
+    # configurable without baking config.json into the image.
+    if os.environ.get("ANYTHINGLLM_URL"):
+        cfg["anythingllm_url"] = os.environ["ANYTHINGLLM_URL"]
+    if os.environ.get("LISTEN_HOST"):
+        cfg["listen_host"] = os.environ["LISTEN_HOST"]
+    if os.environ.get("LISTEN_PORT"):
+        try:
+            cfg["listen_port"] = int(os.environ["LISTEN_PORT"])
+        except ValueError:
+            print("[config] LISTEN_PORT must be a number; using configured value")
+
     if not cfg.get("secret_key"):
         # Generate cryptographically secure session secret
         cfg["secret_key"] = secrets.token_hex(32)

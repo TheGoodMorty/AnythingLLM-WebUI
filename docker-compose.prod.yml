@@ -1,0 +1,30 @@
+services:
+  anythingllm-webui:
+    image: "ghcr.io/jr-k/anythingllm-webui:latest"
+    pull_policy: always
+    expose:
+      - "1555"
+    environment:
+      ANYTHINGLLM_URL: "${ANYTHINGLLM_URL:-http://host.docker.internal:3001}"
+      LISTEN_HOST: "0.0.0.0"
+      LISTEN_PORT: "1555"
+      DATA_DIR: "/data"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - anythingllm-webui-data:/data
+    restart: unless-stopped
+    init: true
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:1555/ui/session', timeout=5)"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  anythingllm-webui-data:
