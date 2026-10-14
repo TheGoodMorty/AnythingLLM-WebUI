@@ -1163,13 +1163,14 @@ class Component extends DCLogic {
     const ct = res.headers.get("content-type") || "";
     if (opts.raw) {
       const text = await res.text();
-      if (!res.ok) throw new Error(text.slice(0, 300) || ("HTTP " + res.status));
+      // Errors carry .status so callers can branch on the HTTP code (e.g. 404).
+      if (!res.ok) throw Object.assign(new Error(text.slice(0, 300) || ("HTTP " + res.status)), { status: res.status });
       return text;
     }
     let data = null;
     if (ct.includes("json")) { try { data = await res.json(); } catch (e) { data = null; } }
     else data = { text: await res.text() };
-    if (!res.ok) throw new Error((data && (data.error || data.message)) || ("HTTP " + res.status + " on " + path));
+    if (!res.ok) throw Object.assign(new Error((data && (data.error || data.message)) || ("HTTP " + res.status + " on " + path)), { status: res.status });
     return data;
   }
 
@@ -2345,7 +2346,15 @@ class Component extends DCLogic {
       await this.api("/workspace/" + ws.slug + "/update-pin", { method: "POST", body: { docPath: path, pinStatus: pin } });
       this.loadPanel("workspace");
       this.toast(pin ? "Pinned" : "Unpinned");
-    } catch (e) { this.toast(e.message, "error"); }
+    } catch (e) {
+      // Since AnythingLLM 1.18.0 update-pin answers 404 when the workspace OR the
+      // document is gone - reload the list so the stale row drops out.
+      if (e.status === 404) {
+        this.loadPanel("workspace");
+        return this.toast("That document or workspace no longer exists - list refreshed", "error");
+      }
+      this.toast(e.message, "error");
+    }
   }
   async updateEmbeddings(adds, deletes) {
     const ws = this.activeWorkspace(); if (!ws) return this.toast("No workspace selected", "error");
