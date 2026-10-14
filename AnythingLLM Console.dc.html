@@ -253,7 +253,15 @@ Thoughts
 <sc-if value="{{ m.hasOutputs }}">
 <div style="margin-top:11px;display:flex;flex-wrap:wrap;gap:7px">
 <sc-for list="{{ m.outputs }}" as="o" hint-placeholder-count="1">
+<sc-if value="{{ o.isFile }}">
 <a href="{{ o.href }}" target="_blank" style="display:flex;align-items:center;gap:7px;padding:7px 11px;background:rgba(77,163,245,.1);border:1px solid rgba(77,163,245,.3);border-radius:9px;font-size:12px;color:var(--ac2)">{{ o.name }}<span style="font:400 10px Geist Mono,monospace;color:var(--mu5)">download</span></a>
+</sc-if>
+<sc-if value="{{ o.isImage }}">
+<a href="{{ o.href }}" target="_blank" title="{{ o.name }}" style="display:block;max-width:240px;text-decoration:none">
+<img src="{{ o.href }}" loading="lazy" alt="{{ o.name }}" style="display:block;max-width:100%;border-radius:9px;border:1px solid rgba(77,163,245,.3)">
+<span style="display:inline-flex;align-items:center;gap:7px;margin-top:5px;padding:5px 9px;background:rgba(77,163,245,.1);border:1px solid rgba(77,163,245,.3);border-radius:8px;font-size:11.5px;color:var(--ac2);max-width:240px"><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ o.name }}</span><span style="flex:none;font:400 10px Geist Mono,monospace;color:var(--mu5)">open</span></span>
+</a>
+</sc-if>
 </sc-for>
 </div>
 </sc-if>
@@ -461,8 +469,8 @@ Thoughts
 </div>
 </div>
 <div style="background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px;margin-bottom:12px">
-<div style="font:500 10.5px Geist Mono,monospace;letter-spacing:.09em;text-transform:uppercase;color:var(--mu4);margin-bottom:11px">Scrape a URL</div>
-<input data-field="link" value="{{ f.link }}" onChange="{{ onField }}" placeholder="https://example.com/page" style="width:100%;background:var(--field);border:1px solid var(--bd2);border-radius:8px;padding:8px 10px;font:400 12.5px Geist Mono,monospace">
+<div style="font:500 10.5px Geist Mono,monospace;letter-spacing:.09em;text-transform:uppercase;color:var(--mu4);margin-bottom:11px">Scrape URLs · one per line</div>
+<textarea data-field="link" value="{{ f.link }}" onChange="{{ onField }}" rows="2" placeholder="https://example.com/page&#10;https://another.example/page" style="width:100%;background:var(--field);border:1px solid var(--bd2);border-radius:8px;padding:8px 10px;font:400 12.5px Geist Mono,monospace;resize:vertical"></textarea>
 <textarea data-field="scraperHeaders" value="{{ f.scraperHeaders }}" onChange="{{ onField }}" rows="2" placeholder='{"Authorization":"Bearer token"}' style="width:100%;margin-top:9px;background:var(--field);border:1px solid var(--bd2);border-radius:8px;padding:8px 10px;font:400 11.5px Geist Mono,monospace;resize:vertical"></textarea>
 <button onClick="{{ uploadLink }}" style="margin-top:11px;padding:8px 13px;border:0;border-radius:8px;background:var(--ac);color:var(--acink);font:600 11.5px Geist,sans-serif">Scrape &amp; embed</button>
 </div>
@@ -777,10 +785,11 @@ Thoughts
 <input data-field="fileName" value="{{ f.fileName }}" onChange="{{ onField }}" placeholder="pdf-e9e14f28-…-dd331517f567.pdf" style="min-width:0;background:var(--field);border:1px solid var(--bd2);border-radius:8px;padding:8px 10px;font:400 12px Geist Mono,monospace">
 <button onClick="{{ downloadTyped }}" style="padding:8px 13px;border:0;border-radius:8px;background:var(--ac);color:var(--acink);font:600 11.5px Geist,sans-serif">Download</button>
 </div>
-<div style="font-size:11.5px;color:var(--mu4);line-height:1.55;margin-top:10px">Agent skills return a <span style="font-family:Geist Mono,monospace">storageFilename</span> with the reply. Everything this browser has seen is listed below and stays here until you clear it.</div>
+<div style="font-size:11.5px;color:var(--mu4);line-height:1.55;margin-top:10px">Agent skills and generated images return a <span style="font-family:Geist Mono,monospace">storageFilename</span> with the reply. Everything this browser has seen is listed below and stays here until you clear it.</div>
 </div>
 <sc-for list="{{ fileRows }}" as="fl" hint-placeholder-count="2">
 <div style="display:flex;align-items:center;gap:9px;background:var(--card);border:1px solid var(--bd);border-radius:11px;padding:11px 13px;margin-bottom:7px">
+<sc-if value="{{ fl.isImage }}"><a href="{{ fl.href }}" target="_blank" title="{{ fl.name }}" style="flex:none"><img src="{{ fl.href }}" loading="lazy" alt="{{ fl.name }}" style="display:block;width:44px;height:44px;object-fit:cover;border-radius:8px;border:1px solid var(--bd2)"></a></sc-if>
 <div style="flex:1;min-width:0">
 <div style="font-size:12.5px;color:var(--tx2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ fl.name }}</div>
 <div style="font:400 10px Geist Mono,monospace;color:var(--mu5);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ fl.meta }}</div>
@@ -791,7 +800,7 @@ Thoughts
 </div>
 </sc-for>
 <sc-if value="{{ noFiles }}">
-<div style="padding:26px 12px;text-align:center;color:var(--mu5);font-size:12px;line-height:1.65">No agent files yet.<br>When an @agent skill generates a PDF, DOCX, XLSX or PPTX, it lands here automatically.</div>
+<div style="padding:26px 12px;text-align:center;color:var(--mu5);font-size:12px;line-height:1.65">No agent files yet.<br>When an @agent skill generates a file (PDF, DOCX, XLSX, PPTX) or an image (img-*.png), it lands here automatically.</div>
 </sc-if>
 <sc-if value="{{ hasFiles }}">
 <button onClick="{{ clearFiles }}" style="margin-top:6px;padding:8px 13px;border:1px solid var(--bd5);border-radius:8px;background:transparent;color:var(--tx3);font:500 11.5px Geist,sans-serif">Clear list</button>
@@ -1032,6 +1041,11 @@ class Component extends DCLogic {
     } catch (e) { this.toast("The browser blocked clipboard access", "error"); }
   }
   loadFiles() { try { return JSON.parse(localStorage.getItem("alc.files") || "[]"); } catch (e) { return []; } }
+  // Generated images (img-*.png and friends) are served by
+  // GET /v1/document/generated-files/{filename} just like agent-skill files,
+  // so they get inline previews instead of a bare download pill.
+  isGenImage(name) { return /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(String(name || "")); }
+
   recordOutputs(outputs, ctx) {
     const seen = (outputs || []).filter((o) => o && (o.storageFilename || o.name));
     if (!seen.length) return;
@@ -1548,6 +1562,13 @@ class Component extends DCLogic {
         });
         if (!res.ok || !res.body) {
           const t = await res.text();
+          // thread stream-chat answers 404 when the thread no longer exists
+          // (deleted server-side). Drop the stale selection so the next send
+          // opens a fresh thread; refreshThreads below reloads the list.
+          if (res.status === 404 && th) {
+            this.setState({ threadSlug: null });
+            throw new Error("Thread not found (404) - it no longer exists on the server. Pick a thread and send again.");
+          }
           throw new Error(t.slice(0, 240) || "HTTP " + res.status);
         }
         const reader = res.body.getReader(), dec = new TextDecoder();
@@ -1969,7 +1990,11 @@ class Component extends DCLogic {
         return { title, chunk: (x.chunk || x.text || "").slice(0, 400), iconPath: this.sourceIcon(title) };
       }),
       hasSources: !!(m.sources || []).length,
-      outputs: (m.outputs || []).map((o) => ({ name: o.name || o.storageFilename, href: "/api/v1/document/generated-files/" + encodeURIComponent(o.storageFilename || o.name) })),
+      outputs: (m.outputs || []).map((o) => {
+        const file = o.storageFilename || o.name;
+        return { name: o.name || o.storageFilename, href: "/api/v1/document/generated-files/" + encodeURIComponent(file),
+          isImage: this.isGenImage(file), isFile: !this.isGenImage(file) };
+      }),
       hasOutputs: !!(m.outputs || []).length,
       error: m.error || null,
       canCopy: !!String(think.content || "").trim(),
@@ -1996,7 +2021,7 @@ class Component extends DCLogic {
       ["openai", "OpenAI", "OpenAI-compatible endpoints"],
       ["imagegen", "Image Gen", "Generate or edit images via the configured image provider"],
       ["transcribe", "Voice", "Transcribe audio or video"],
-      ["files", "Files", "Files @agent skills generated in chat"],
+      ["files", "Files", "Files & images generated in chat"],
       ["system", "System", "System settings, vectors, exports"],
       ["admin", "Admin", "Users, invites, permissions"],
       ["raw", "API", "Raw request console — every endpoint"]
@@ -2377,15 +2402,18 @@ class Component extends DCLogic {
   }
   async uploadLink() {
     const f = this.form();
-    if (!f.link) return this.toast("Enter a URL", "error");
+    // POST /v1/document/upload-link accepts a single link string OR an array of
+    // links, so one line stays a string and multiple lines go out as an array.
+    const links = String(f.link || "").split(/\s*\n+\s*/).map((s) => s.trim()).filter(Boolean);
+    if (!links.length) return this.toast("Enter a URL", "error");
     let headers;
     if (f.scraperHeaders.trim()) { try { headers = JSON.parse(f.scraperHeaders); } catch (e) { return this.toast("Scraper headers must be JSON", "error"); } }
     try {
-      this.toast("Scraping…");
+      this.toast(links.length > 1 ? "Scraping " + links.length + " links…" : "Scraping…");
       await this.api("/document/upload-link", { method: "POST", body: {
-        link: f.link, addToWorkspaces: f.addToWorkspaces || undefined, scraperHeaders: headers
+        link: links.length > 1 ? links : links[0], addToWorkspaces: f.addToWorkspaces || undefined, scraperHeaders: headers
       } });
-      this.toast("Link scraped");
+      this.toast(links.length > 1 ? links.length + " links scraped" : "Link scraped");
       this.loadPanel("documents");
     } catch (e) { this.toast(e.message, "error"); }
   }
@@ -2833,7 +2861,7 @@ class Component extends DCLogic {
       isRawPanel: s.panel === "raw", isSettingsPanel: s.panel === "settings",
       isFilesPanel: s.panel === "files",
       fileRows: s.files.map((x) => ({
-        file: x.file, name: x.name,
+        file: x.file, name: x.name, isImage: this.isGenImage(x.file),
         href: "/api/v1/document/generated-files/" + encodeURIComponent(x.file),
         meta: [x.ws, x.thread, new Date(x.at).toLocaleString()].filter(Boolean).join(" · ")
       })),

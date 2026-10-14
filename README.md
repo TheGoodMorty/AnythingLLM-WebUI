@@ -4,6 +4,8 @@ A self-hosted web interface for your AnythingLLM instance. Built to solve the mo
 
 **Why this exists:** The official AnythingLLM mobile and desktop apps sometimes fail to pair correctly. This web console provides a reliable alternative that works on any device with a browser — phones, tablets, laptops, or desktops.
 
+**API compatibility:** This release targets the AnythingLLM Developer API as of **v1.17.0** — including URL-array document imports, generated-image downloads, and thread 404 handling.
+
 ## Quick Start
 
 ```bash
