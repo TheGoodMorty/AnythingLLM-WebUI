@@ -4,7 +4,7 @@ A self-hosted web interface for your AnythingLLM instance. Built to solve the mo
 
 **Why this exists:** The official AnythingLLM mobile and desktop apps sometimes fail to pair correctly. This web console provides a reliable alternative that works on any device with a browser — phones, tablets, laptops, or desktops.
 
-**API compatibility:** This release targets the AnythingLLM Developer API as of **v1.18.0** — including URL-array document imports, generated-image downloads, and 404 handling for deleted threads, documents, and pins.
+**API compatibility:** This release targets the AnythingLLM Developer API as of **v1.19.0** — including URL-array document imports, generated-image downloads, 404 handling for deleted threads, documents, and pins, a Meeting Assistant panel, and the transcribe multipart field rename (`audio` → `file`).
 
 ## Quick Start
 
@@ -246,6 +246,13 @@ server {
 - Record voice messages directly
 - Append transcripts to chat
 
+### Meetings Panel
+- Start and stop background meeting recordings (`POST /v1/meeting-assistant/{action}`)
+- Choose the source app: Slack, Zoom, Teams, Discord, WhatsApp, Telegram, Signal, Chrome, Edge, Safari, Firefox, Brave
+- Hybrid semantic + keyword search across all meeting summaries and transcripts
+- Stopping a meeting transcribes and summarizes it automatically server-side
+- Shows only what this browser has seen — see Known Limitations
+
 ### Files Panel
 - View all agent-generated files (PDFs, DOCX, etc.)
 - Download files by storage filename
@@ -366,6 +373,8 @@ The check mirrors the server-side capability guard merged upstream in [PR #6222]
 9. **Multi-user mode detection** — Endpoints are always attempted; 401 errors shown as banners if not in multi-user mode.
 
 10. **`/img` results are session-only** — The developer API cannot write generated images into server-side chat history. Chat image bubbles disappear when the thread reloads; the Image Gen panel keeps the latest result.
+
+11. **Meetings panel is per-browser** — The Meeting Assistant API has no GET, so the console cannot query what is recording right now; it shows the last action and last search this browser saw (persisted in localStorage).
 
 ## Customization Ideas
 

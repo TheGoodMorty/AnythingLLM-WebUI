@@ -778,6 +778,44 @@ Thoughts
 </sc-if>
 </sc-if>
 
+<sc-if value="{{ isMeetingPanel }}">
+<div style="background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px;margin-bottom:12px">
+<div style="font:500 10.5px Geist Mono,monospace;letter-spacing:.09em;text-transform:uppercase;color:var(--mu4);margin-bottom:11px">Start or stop a background recording</div>
+<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+<select data-field="meetingProvider" value="{{ f.meetingProvider }}" onChange="{{ onField }}" style="min-width:150px;background:var(--field);border:1px solid var(--bd2);border-radius:8px;padding:8px 10px;font:400 12px Geist Mono,monospace"><sc-for list="{{ meetingProviderOptions }}" as="o" hint-placeholder-count="13"><option value="{{ o.value }}">{{ o.label }}</option></sc-for></select>
+<button onClick="{{ startMeeting }}" style="padding:8px 13px;border:0;border-radius:8px;background:var(--ac);color:var(--acink);font:600 11.5px Geist,sans-serif">Start</button>
+<button onClick="{{ stopMeeting }}" style="padding:8px 13px;border:1px solid var(--bd5);border-radius:8px;background:transparent;color:var(--tx3);font:500 11.5px Geist,sans-serif">Stop</button>
+</div>
+<div style="font-size:11.5px;color:var(--mu4);line-height:1.55;margin-top:10px">One meeting at a time — start fails if one is underway, stop if none is. Stopping transcribes and summarizes automatically. The API has no way to ask what is recording right now, so the line below shows what this console has seen.</div>
+<sc-if value="{{ hasMeetingStatus }}">
+<div style="margin-top:4px;padding:9px 11px;background:var(--field);border:1px solid var(--bd);border-radius:9px;font:400 11.5px Geist Mono,monospace;color:var(--tx2);word-break:break-word">{{ meetingStatusText }}</div>
+</sc-if>
+</div>
+<div style="background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px">
+<div style="font:500 10.5px Geist Mono,monospace;letter-spacing:.09em;text-transform:uppercase;color:var(--mu4);margin-bottom:11px">Search meeting memory · hybrid semantic + keyword</div>
+<div style="display:grid;grid-template-columns:minmax(120px,1fr) auto;gap:9px;min-width:0">
+<input data-field="meetingQuery" value="{{ f.meetingQuery }}" onChange="{{ onField }}" placeholder="What did we decide about the launch date?" style="min-width:0;background:var(--field);border:1px solid var(--bd2);border-radius:8px;padding:8px 10px;font-size:12.5px">
+<button onClick="{{ runMeetingSearch }}" style="padding:8px 13px;border:0;border-radius:8px;background:var(--ac);color:var(--acink);font:600 11.5px Geist,sans-serif">Search</button>
+</div>
+<sc-for list="{{ meetingRows }}" as="mr" hint-placeholder-count="3">
+<div style="margin-top:9px;padding:9px 11px;background:var(--card);border:1px solid var(--bd);border-radius:9px">
+<div style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--tx2)">
+<sc-if value="{{ mr.hasTab }}"><span style="flex:none;padding:3px 7px;border-radius:999px;background:rgba(78,201,139,.12);color:var(--ok);font:500 10px Geist Mono,monospace">{{ mr.tab }}</span></sc-if>
+<span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ mr.name }}</span>
+<span style="flex:none;margin-left:auto;font:400 10px Geist Mono,monospace;color:var(--mu5)">{{ mr.at }}</span>
+</div>
+<div style="font-size:12px;color:var(--mu);line-height:1.55;margin-top:5px">{{ mr.text }}</div>
+</div>
+</sc-for>
+<sc-if value="{{ meetingNoResults }}">
+<div style="padding:22px 12px;text-align:center;color:var(--mu5);font-size:12px;line-height:1.65">Nothing searched yet.<br>Search runs server-side across all meeting summaries and transcripts.</div>
+</sc-if>
+<sc-if value="{{ hasMeetingResults }}">
+<button onClick="{{ clearMeeting }}" style="margin-top:6px;padding:8px 13px;border:1px solid var(--bd5);border-radius:8px;background:transparent;color:var(--tx3);font:500 11.5px Geist,sans-serif">Clear results</button>
+</sc-if>
+</div>
+</sc-if>
+
 <sc-if value="{{ isFilesPanel }}">
 <div style="background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px;margin-bottom:12px">
 <div style="font:500 10.5px Geist Mono,monospace;letter-spacing:.09em;text-transform:uppercase;color:var(--mu4);margin-bottom:11px">Fetch by storage filename</div>
@@ -955,6 +993,7 @@ class Component extends DCLogic {
       narrow: window.innerWidth < 900,
       theme: this.remember("theme", "dark"),
       files: this.loadFiles(),
+      meeting: this.loadMeeting(),
       mode: this.remember("mode", this.props.defaultMode || "chat"),
       stream: this.remember("stream", this.props.streamByDefault !== false ? "1" : "0") === "1"
     }, () => this.boot());
@@ -1041,6 +1080,15 @@ class Component extends DCLogic {
     } catch (e) { this.toast("The browser blocked clipboard access", "error"); }
   }
   loadFiles() { try { return JSON.parse(localStorage.getItem("alc.files") || "[]"); } catch (e) { return []; } }
+  // Meeting Assistant state: last action seen + last search results. The API has no GET
+  // side, so everything the panel shows is what this console observed, kept in localStorage.
+  loadMeeting() {
+    try {
+      const v = JSON.parse(localStorage.getItem("alc.meeting") || "null");
+      if (!v || typeof v !== "object") return null;
+      return { status: (v.status && typeof v.status === "object") ? v.status : null, results: Array.isArray(v.results) ? v.results : [] };
+    } catch (e) { return null; }
+  }
   // Generated images (img-*.png and friends) are served by
   // GET /v1/document/generated-files/{filename} just like agent-skill files,
   // so they get inline previews instead of a bare download pill.
@@ -1215,6 +1263,12 @@ class Component extends DCLogic {
     if (path === "/document/create-folder") { m.docs.items.push({ name: body.name, type: "folder", items: [] }); return { success: true }; }
     if (path === "/document/remove-folder") { m.docs.items = m.docs.items.filter((x) => x.name !== body.name); return { success: true }; }
     if (path === "/document/move-files" || path === "/system/remove-documents" || path.indexOf("update-embeddings") > -1 || path.indexOf("update-pin") > -1) return { success: true };
+    if (seg[0] === "meeting-assistant" && seg[1] === "search") {
+      return { results: [{ meeting: { uuid: "canned-meeting", name: "Sample meeting (preview mode)", createdAt: "2026-10-20T17:00:00.000Z" }, text: "Canned search hit — in preview mode the raw console shows sample data; run server.py and sign in to hit the live endpoint.", tab: "summary" }] };
+    }
+    if (seg[0] === "meeting-assistant") {
+      return { meeting: { uuid: "canned-meeting", name: "Preview mode sample", source: null, status: "draft", createdAt: new Date().toISOString(), lastUpdatedAt: new Date().toISOString() }, error: null };
+    }
     if (path.indexOf("chat") > -1 && method === "POST") {
       return { id: "demo", type: "textResponse", textResponse: "Preview mode: no AnythingLLM instance is connected, so this reply is canned. Run server.py, sign in, and the same button will POST to " + path + ".", sources: [], close: true };
     }
@@ -1736,7 +1790,7 @@ class Component extends DCLogic {
         this.toast("Transcribing…");
         try {
           const form = new FormData();
-          form.append("audio", blob, "prompt.webm");
+          form.append("file", blob, "prompt.webm");   // multipart field renamed audio->file in 1.19.0
           const j = await this.api("/transcription/transcribe", { method: "POST", form });
           const text = this.transcriptText(j);
           if (!text) throw new Error("No transcript returned");
@@ -2022,6 +2076,7 @@ class Component extends DCLogic {
       ["openai", "OpenAI", "OpenAI-compatible endpoints"],
       ["imagegen", "Image Gen", "Generate or edit images via the configured image provider"],
       ["transcribe", "Voice", "Transcribe audio or video"],
+      ["meeting", "Meetings", "Start/stop a recording and search meeting memory"],
       ["files", "Files", "Files & images generated in chat"],
       ["system", "System", "System settings, vectors, exports"],
       ["admin", "Admin", "Users, invites, permissions"],
@@ -2042,6 +2097,7 @@ class Component extends DCLogic {
       openai: ["OpenAI-compatible", "/v1/openai/*"],
       imagegen: ["Image generation", "POST /v1/openai/images/generations"],
       transcribe: ["Transcription", "POST /v1/transcription/transcribe"],
+      meeting: ["Meeting Assistant", "POST /v1/meeting-assistant/{action} · /search"],
       files: ["Agent files", "GET /v1/document/generated-files/{filename}"],
       system: ["System", "/v1/system"],
       admin: ["Admin", "/v1/admin · /v1/users"],
@@ -2274,6 +2330,7 @@ class Component extends DCLogic {
       openAiPrompt: "", queryRefusalResponse: "",
       newFolder: "", folder: "custom-documents", addToWorkspaces: "", metaTitle: "", metaAuthor: "",
       link: "", scraperHeaders: "", rawTitle: "", rawText: "",
+      meetingProvider: "", meetingQuery: "",
       moveJson: '{\n  "files": [\n    { "from": "custom-documents/file.json", "to": "archive/file.json" }\n  ]\n}',
       searchWs: ws.slug || "", searchTopN: 4, searchScore: 0.25, searchQuery: "",
       envKey: "", envValue: "",
@@ -2322,6 +2379,8 @@ class Component extends DCLogic {
         this.loadConfig();
       } else if (key === "search") {
         this.mergeForm({ searchWs: this.state.wsSlug || "" });
+      } else if (key === "meeting") {
+        // No loadable endpoint for this panel - state was restored from localStorage on mount.
       }
     } catch (e) { this.toast(e.message, "error"); }
   }
@@ -2486,7 +2545,7 @@ class Component extends DCLogic {
   async runTranscribe() {
     if (!this.pendingAudio) return this.toast("Pick an audio or video file", "error");
     const form = new FormData();
-    form.append("audio", this.pendingAudio, this.pendingAudio.name);
+    form.append("file", this.pendingAudio, this.pendingAudio.name);   // multipart field renamed audio->file in 1.19.0
     try {
       this.toast("Transcribing " + this.pendingAudio.name + "… this can take a while");
       const j = await this.api("/transcription/transcribe", { method: "POST", form });
@@ -2495,6 +2554,58 @@ class Component extends DCLogic {
       this.toast("Transcribed");
     } catch (e) { this.toast(e.message, "error"); }
   }
+
+  // ---------------------------------------------------------------- meeting assistant
+  // AnythingLLM 1.19.0: POST /v1/meeting-assistant/{action} (start | stop) and
+  // POST /v1/meeting-assistant/search. Only one recording can exist at a time, and
+  // stopping transcribes + summarizes it server-side. The developer API exposes no
+  // GET for meetings, so the panel can only show what the console itself observed -
+  // last action + last results, mirrored to localStorage so a reload keeps them.
+  async runMeeting(action) {
+    if (this.state.demo) return this.toast("Preview mode: no server to send to", "error");
+    const f = this.form();
+    const body = {};
+    if (action === "start" && (f.meetingProvider || "").trim()) body.provider = f.meetingProvider.trim();
+    try {
+      this.toast(action === "start" ? "Starting recording…" : "Stopping recording…");
+      const j = await this.api("/meeting-assistant/" + action, { method: "POST", body });
+      const mtg = (j && j.meeting) || null;
+      this.setMeeting({ status: mtg
+        ? { action, at: Date.now(), name: mtg.name || "", source: mtg.source || "", status: mtg.status || "", uuid: mtg.uuid || "" }
+        : { action, at: Date.now() } });
+      this.toast(action === "stop" ? "Stopped — the server transcribes and summarizes it" : "Recording started");
+    } catch (e) {
+      if (e.status === 409) {
+        return this.toast(e.message || ("Cannot " + action + " right now — one meeting at a time, none underway for stop, or the transcription models are not downloaded"), "error");
+      }
+      this.toast(e.message, "error");
+    }
+  }
+  async runMeetingSearch() {
+    if (this.state.demo) return this.toast("Preview mode: no server to send to", "error");
+    const q = String(this.form().meetingQuery || "").trim();
+    if (!q) return this.toast("Enter a search query", "error");
+    try {
+      const j = await this.api("/meeting-assistant/search", { method: "POST", body: { query: q } });
+      this.setMeeting({ results: Array.isArray(j && j.results) ? j.results : [] });
+      this.toast(((j && j.results) || []).length + " results");
+    } catch (e) { this.toast(e.message, "error"); }
+  }
+  setMeeting(patch) {
+    // Updater + callback, like recordOutputs: the write must go through the freshest
+    // state (two setMeeting calls can land in the same batch), and persisting inside
+    // the updater itself would run on a stale or replayed state snapshot.
+    let capped = null;
+    this.setState((st) => {
+      const prev = st.meeting || { status: null, results: [] };
+      capped = {
+        status: patch.status !== undefined ? patch.status : prev.status,
+        results: patch.results !== undefined ? patch.results.slice(0, 200) : prev.results
+      };
+      return { meeting: capped };
+    }, () => { if (capped) this.keep("meeting", JSON.stringify(capped)); });
+  }
+  clearMeeting() { this.setMeeting({ results: [] }); this.toast("Results cleared"); }
 
   // ---------------------------------------------------------------- image generation
   // POST /v1/openai/images/generations — multipart: prompt (required), optional
@@ -2679,7 +2790,10 @@ class Component extends DCLogic {
       E("Embed", "DELETE", "/v1/embed/{embedUuid}"),
       E("Embed", "GET", "/v1/embed/{embedUuid}/chats"),
       E("Embed", "GET", "/v1/embed/{embedUuid}/chats/{sessionUuid}"),
-      E("Transcription", "POST", "/v1/transcription/transcribe", "multipart: use the Voice panel")
+      E("Transcription", "POST", "/v1/transcription/transcribe", "multipart: 'file' field (renamed from 'audio' in 1.19.0) — use the Voice panel"),
+      E("Meeting", "POST", "/v1/meeting-assistant/start", '{\n  "provider": "zoom"\n}'),
+      E("Meeting", "POST", "/v1/meeting-assistant/stop", "{}"),
+      E("Meeting", "POST", "/v1/meeting-assistant/search", '{\n  "query": "What did we decide about the Q3 launch date?"\n}')
     ];
     return this._eps;
   }
@@ -2866,6 +2980,7 @@ class Component extends DCLogic {
       isSearchPanel: s.panel === "search", isSystemPanel: s.panel === "system",
       isAdminPanel: s.panel === "admin", isEmbedsPanel: s.panel === "embeds",
       isOpenAiPanel: s.panel === "openai", isTranscribePanel: s.panel === "transcribe",
+      isMeetingPanel: s.panel === "meeting",
       isImageGenPanel: s.panel === "imagegen",
       isRawPanel: s.panel === "raw", isSettingsPanel: s.panel === "settings",
       isFilesPanel: s.panel === "files",
@@ -2881,6 +2996,28 @@ class Component extends DCLogic {
         this.setState({ files });
       },
       clearFiles: () => { this.keep("files", "[]"); this.setState({ files: [] }); this.toast("List cleared"); },
+      // Meeting Assistant (new in 1.19.0): state lives as s.meeting = { status, results },
+      // restored from localStorage on mount. The API can't query current recording state,
+      // so this reflects what the console itself has seen.
+      meetingProviderOptions: ["", "slack", "zoom", "teams", "discord", "whatsapp", "telegram", "signal", "chrome", "edge", "safari", "firefox", "brave"]
+        .map((v) => ({ value: v, label: v || "(no source)" })),
+      meetingRows: (((s.meeting || {}).results) || []).map((r) => {
+        const mt = (r && r.meeting) || {};
+        return { tab: (r && r.tab) || "", hasTab: !!(r && r.tab), name: mt.name || "unnamed meeting",
+          text: String((r && r.text) || "").slice(0, 400),
+          at: mt.createdAt ? new Date(mt.createdAt).toLocaleString() : "" };
+      }),
+      hasMeetingResults: !!(((s.meeting || {}).results) || []).length,
+      meetingNoResults: !(((s.meeting || {}).results) || []).length,
+      hasMeetingStatus: !!((s.meeting || {}).status),
+      meetingStatusText: (() => {
+        const stt = (s.meeting || {}).status || {};
+        return [ stt.action, stt.name || "unnamed meeting", stt.source, stt.status, stt.at ? new Date(stt.at).toLocaleString() : "" ].filter(Boolean).join(" · ");
+      })(),
+      startMeeting: () => this.runMeeting("start"),
+      stopMeeting: () => this.runMeeting("stop"),
+      runMeetingSearch: () => this.runMeetingSearch(),
+      clearMeeting: () => this.clearMeeting(),
       downloadTyped: () => {
         const name = (this.form().fileName || "").trim();
         if (!name) return this.toast("Enter the storage filename from the chat response", "error");
