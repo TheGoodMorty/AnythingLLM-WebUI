@@ -816,6 +816,67 @@ Thoughts
 </div>
 </sc-if>
 
+<sc-if value="{{ isMcpPanel }}">
+<div style="background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px;margin-bottom:12px">
+<div style="font:500 10.5px Geist Mono,monospace;letter-spacing:.09em;text-transform:uppercase;color:var(--mu4);margin-bottom:11px">{{ mcpFormTitle }}</div>
+<sc-if value="{{ notMcpEditing }}">
+<input data-field="mcpName" value="{{ f.mcpName }}" onChange="{{ onField }}" placeholder="my-mcp-server" style="width:100%;background:var(--field);border:1px solid var(--bd2);border-radius:8px;padding:8px 10px;font:400 12.5px Geist Mono,monospace">
+</sc-if>
+<sc-if value="{{ isMcpEditing }}">
+<input value="{{ f.mcpName }}" disabled style="width:100%;background:var(--field);border:1px solid var(--bd2);border-radius:8px;padding:8px 10px;font:400 12.5px Geist Mono,monospace;opacity:.6">
+</sc-if>
+<textarea data-field="mcpConfig" value="{{ f.mcpConfig }}" onChange="{{ onField }}" rows="7" style="width:100%;margin-top:9px;background:var(--field);border:1px solid var(--bd2);border-radius:8px;padding:9px 11px;font:400 11.5px Geist Mono,monospace;line-height:1.6;resize:vertical"></textarea>
+<div style="font-size:11.5px;color:var(--mu4);line-height:1.55;margin-top:10px">One <span style="font-family:Geist Mono,monospace">mcpServers</span> entry: stdio <span style="font-family:Geist Mono,monospace">{command, args, env}</span> or remote <span style="font-family:Geist Mono,monospace">{type:"streamable", url, headers}</span>. Editing fully replaces the definition — keep the <span style="font-family:Geist Mono,monospace">anythingllm</span> block to preserve tool suppression. <span style="font-family:Geist Mono,monospace">anythingllm.autoStart:false</span> saves without booting. A server is saved even if it fails to start — check the error line on its card.</div>
+<div style="display:flex;gap:8px;margin-top:11px">
+<sc-if value="{{ notMcpEditing }}">
+<button onClick="{{ addMcpServer }}" style="padding:8px 13px;border:0;border-radius:8px;background:var(--ac);color:var(--acink);font:600 11.5px Geist,sans-serif">Add server</button>
+</sc-if>
+<sc-if value="{{ isMcpEditing }}">
+<button onClick="{{ saveMcpServer }}" style="padding:8px 13px;border:0;border-radius:8px;background:var(--ac);color:var(--acink);font:600 11.5px Geist,sans-serif">Save &amp; restart</button>
+<button onClick="{{ cancelMcpEdit }}" style="padding:8px 13px;border:1px solid var(--bd5);border-radius:8px;background:transparent;color:var(--tx3);font:500 11.5px Geist,sans-serif">Cancel</button>
+</sc-if>
+</div>
+</div>
+<div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">
+<span style="flex:1;font:500 10.5px Geist Mono,monospace;letter-spacing:.09em;text-transform:uppercase;color:var(--mu4)">Servers</span>
+<button onClick="{{ reloadMcpServers }}" style="padding:6px 11px;border:1px solid var(--bd5);border-radius:8px;background:transparent;color:var(--tx3);font:500 10.5px Geist Mono,monospace">Reload all</button>
+</div>
+<div style="font-size:11.5px;color:var(--mu4);line-height:1.55;margin-bottom:9px">Listing boots servers that were never started; manually stopped ones stay stopped until started again or Reload all. Disabled tools are not given to agents.</div>
+<sc-for list="{{ mcpRows }}" as="sv" hint-placeholder-count="2">
+<div style="background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:13px;margin-bottom:8px">
+<div style="display:flex;align-items:center;gap:8px">
+<span style="width:6px;height:6px;border-radius:50%;background:{{ sv.dot }};flex:none"></span>
+<span style="flex:1;min-width:0;font:400 11.5px Geist Mono,monospace;color:var(--tx2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ sv.name }}</span>
+<span style="font:400 10.5px Geist Mono,monospace;color:var(--mu5)">{{ sv.meta }}</span>
+</div>
+<sc-if value="{{ sv.hasError }}">
+<div style="margin-top:7px;font-size:11.5px;color:var(--dg2);line-height:1.5;word-break:break-word">{{ sv.error }}</div>
+</sc-if>
+<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:9px">
+<button data-name="{{ sv.name }}" onClick="{{ toggleMcpServer }}" style="padding:5px 9px;border:1px solid var(--bd5);border-radius:7px;background:transparent;color:var(--tx3);font:500 10px Geist Mono,monospace">{{ sv.toggleLabel }}</button>
+<button data-name="{{ sv.name }}" onClick="{{ toggleMcpTools }}" style="padding:5px 9px;border:1px solid var(--bd5);border-radius:7px;background:transparent;color:var(--mu);font:500 10px Geist Mono,monospace">tools ({{ sv.toolCount }})</button>
+<button data-name="{{ sv.name }}" onClick="{{ editMcpServer }}" style="padding:5px 9px;border:1px solid var(--bd5);border-radius:7px;background:transparent;color:var(--mu);font:500 10px Geist Mono,monospace">edit</button>
+<button data-name="{{ sv.name }}" onClick="{{ deleteMcpServer }}" style="padding:5px 9px;border:1px solid rgba(242,98,79,.3);border-radius:7px;background:transparent;color:var(--dg3);font:500 10px Geist Mono,monospace">delete</button>
+</div>
+<sc-if value="{{ sv.toolsOpen }}">
+<sc-for list="{{ sv.tools }}" as="t" hint-placeholder-count="2">
+<div style="display:flex;align-items:center;gap:8px;margin-top:7px;padding:8px 10px;background:var(--field);border:1px solid var(--bd);border-radius:8px">
+<div style="flex:1;min-width:0">
+<div style="font:400 11.5px Geist Mono,monospace;color:var(--tx2)">{{ t.name }}</div>
+<div style="font-size:11px;color:var(--mu5);margin-top:2px;line-height:1.45">{{ t.description }}</div>
+</div>
+<button data-server="{{ sv.name }}" data-tool="{{ t.name }}" data-enabled="{{ t.nextEnabled }}" onClick="{{ toggleMcpTool }}" style="flex:none;padding:5px 9px;border:1px solid var(--bd5);border-radius:7px;background:transparent;color:var(--tx3);font:500 10px Geist Mono,monospace">{{ t.toggleLabel }}</button>
+</div>
+</sc-for>
+<sc-if value="{{ sv.noTools }}">
+<div style="margin-top:7px;font-size:11.5px;color:var(--mu5)">No tools reported — the server may still be booting or failed to start.</div>
+</sc-if>
+</sc-if>
+</div>
+</sc-for>
+<sc-if value="{{ noMcpServers }}"><div style="color:var(--mu5);font-size:12px;padding:4px 2px">No MCP servers configured.</div></sc-if>
+</sc-if>
+
 <sc-if value="{{ isFilesPanel }}">
 <div style="background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px;margin-bottom:12px">
 <div style="font:500 10.5px Geist Mono,monospace;letter-spacing:.09em;text-transform:uppercase;color:var(--mu4);margin-bottom:11px">Fetch by storage filename</div>
@@ -1263,6 +1324,13 @@ class Component extends DCLogic {
     if (path === "/document/create-folder") { m.docs.items.push({ name: body.name, type: "folder", items: [] }); return { success: true }; }
     if (path === "/document/remove-folder") { m.docs.items = m.docs.items.filter((x) => x.name !== body.name); return { success: true }; }
     if (path === "/document/move-files" || path === "/system/remove-documents" || path.indexOf("update-embeddings") > -1 || path.indexOf("update-pin") > -1) return { success: true };
+    if (seg[0] === "mcp-servers") {
+      if (method === "GET" || seg[1] === "reload") {
+        return { servers: [{ name: "sample-mcp", config: { command: "npx", args: ["-y", "@example/mcp-server"], anythingllm: { suppressedTools: [] } }, running: true, tools: [{ name: "do-thing", description: "Canned tool - preview mode sample data", inputSchema: {} }], error: null, process: { pid: 12345 } }] };
+      }
+      if (seg[2] === "toggle-tool") return { success: true, error: null, suppressedTools: body.enabled ? [] : [body.toolName] };
+      return { success: true, error: null, running: true, startError: null };
+    }
     if (seg[0] === "meeting-assistant" && seg[1] === "search") {
       return { results: [{ meeting: { uuid: "canned-meeting", name: "Sample meeting (preview mode)", createdAt: "2026-10-20T17:00:00.000Z" }, text: "Canned search hit — in preview mode the raw console shows sample data; run server.py and sign in to hit the live endpoint.", tab: "summary" }] };
     }
@@ -2078,6 +2146,7 @@ class Component extends DCLogic {
       ["transcribe", "Voice", "Transcribe audio or video"],
       ["meeting", "Meetings", "Start/stop a recording and search meeting memory"],
       ["files", "Files", "Files & images generated in chat"],
+      ["mcp", "MCP", "MCP servers: add, toggle, tools"],
       ["system", "System", "System settings, vectors, exports"],
       ["admin", "Admin", "Users, invites, permissions"],
       ["raw", "API", "Raw request console — every endpoint"]
@@ -2099,6 +2168,7 @@ class Component extends DCLogic {
       transcribe: ["Transcription", "POST /v1/transcription/transcribe"],
       meeting: ["Meeting Assistant", "POST /v1/meeting-assistant/{action} · /search"],
       files: ["Agent files", "GET /v1/document/generated-files/{filename}"],
+      mcp: ["MCP servers", "/v1/mcp-servers"],
       system: ["System", "/v1/system"],
       admin: ["Admin", "/v1/admin · /v1/users"],
       raw: ["API console", "any endpoint, any payload"],
@@ -2331,6 +2401,7 @@ class Component extends DCLogic {
       newFolder: "", folder: "custom-documents", addToWorkspaces: "", metaTitle: "", metaAuthor: "",
       link: "", scraperHeaders: "", rawTitle: "", rawText: "",
       meetingProvider: "", meetingQuery: "",
+      mcpName: "", mcpConfig: '{\n  "command": "npx",\n  "args": ["-y", "@example/mcp-server"],\n  "env": {}\n}',
       moveJson: '{\n  "files": [\n    { "from": "custom-documents/file.json", "to": "archive/file.json" }\n  ]\n}',
       searchWs: ws.slug || "", searchTopN: 4, searchScore: 0.25, searchQuery: "",
       envKey: "", envValue: "",
@@ -2381,6 +2452,10 @@ class Component extends DCLogic {
         this.mergeForm({ searchWs: this.state.wsSlug || "" });
       } else if (key === "meeting") {
         // No loadable endpoint for this panel - state was restored from localStorage on mount.
+      } else if (key === "mcp") {
+        // GET boots servers that were never started; manually stopped ones stay stopped.
+        const j = await this.api("/mcp-servers");
+        this.setPanelData({ mcp: j.servers || [] });
       }
     } catch (e) { this.toast(e.message, "error"); }
   }
@@ -2793,7 +2868,14 @@ class Component extends DCLogic {
       E("Transcription", "POST", "/v1/transcription/transcribe", "multipart: 'file' field (renamed from 'audio' in 1.19.0) — use the Voice panel"),
       E("Meeting", "POST", "/v1/meeting-assistant/start", '{\n  "provider": "zoom"\n}'),
       E("Meeting", "POST", "/v1/meeting-assistant/stop", "{}"),
-      E("Meeting", "POST", "/v1/meeting-assistant/search", '{\n  "query": "What did we decide about the Q3 launch date?"\n}')
+      E("Meeting", "POST", "/v1/meeting-assistant/search", '{\n  "query": "What did we decide about the Q3 launch date?"\n}'),
+      E("MCP", "GET", "/v1/mcp-servers"),
+      E("MCP", "POST", "/v1/mcp-servers/new", '{\n  "name": "my-mcp-server",\n  "config": {\n    "command": "npx",\n    "args": ["-y", "@example/mcp-server"],\n    "env": {}\n  }\n}'),
+      E("MCP", "POST", "/v1/mcp-servers/reload"),
+      E("MCP", "POST", "/v1/mcp-servers/{name}/update", '{\n  "config": {\n    "type": "streamable",\n    "url": "https://example.com/mcp",\n    "headers": {},\n    "anythingllm": { "suppressedTools": [] }\n  }\n}'),
+      E("MCP", "POST", "/v1/mcp-servers/{name}/toggle"),
+      E("MCP", "POST", "/v1/mcp-servers/{name}/toggle-tool", '{\n  "toolName": "do-thing",\n  "enabled": false\n}'),
+      E("MCP", "DELETE", "/v1/mcp-servers/{name}")
     ];
     return this._eps;
   }
@@ -2898,11 +2980,12 @@ class Component extends DCLogic {
       this.toast("Folder removed"); this.loadPanel("documents");
     } else if (c.kind === "deleteDoc") {
       await this.api("/system/remove-documents", { method: "DELETE", body: { names: [c.target] } });
-      this.toast("Document removed"); this.loadPanel("documents");
+      // Since 1.20.0 a 200 only means "request processed" - the refreshed list shows the truth.
+      this.toast("Removal requested"); this.loadPanel("documents");
     } else if (c.kind === "purgeDocs") {
       await this.api("/system/remove-documents", { method: "DELETE", body: { names: c.target } });
       this.setState({ docSel: [] });
-      this.toast(c.target.length + " documents removed"); this.loadPanel("documents");
+      this.toast("Removal requested for " + c.target.length + " documents"); this.loadPanel("documents");
     } else if (c.kind === "updateEnv") {
       const j = await this.api("/system/update-env", { method: "POST", body: c.target });
       this.toast(j && j.error ? String(j.error) : "Setting applied"); this.loadSystem();
@@ -2915,6 +2998,11 @@ class Component extends DCLogic {
     } else if (c.kind === "deleteEmbed") {
       await this.api("/embed/" + c.target, { method: "DELETE" });
       this.toast("Embed deleted"); this.loadPanel("embeds");
+    } else if (c.kind === "deleteMcp") {
+      const j = await this.api("/mcp-servers/" + encodeURIComponent(c.target), { method: "DELETE" });
+      if (j && j.success === false) this.toast(j.error || "Delete failed", "error");
+      else this.toast("Server removed");
+      this.loadPanel("mcp");
     } else if (c.kind === "deleteAccount") {
       const r = await fetch("/ui/account/" + encodeURIComponent(c.target), { method: "DELETE", credentials: "same-origin" });
       const j = await r.json();
@@ -2981,6 +3069,7 @@ class Component extends DCLogic {
       isAdminPanel: s.panel === "admin", isEmbedsPanel: s.panel === "embeds",
       isOpenAiPanel: s.panel === "openai", isTranscribePanel: s.panel === "transcribe",
       isMeetingPanel: s.panel === "meeting",
+      isMcpPanel: s.panel === "mcp",
       isImageGenPanel: s.panel === "imagegen",
       isRawPanel: s.panel === "raw", isSettingsPanel: s.panel === "settings",
       isFilesPanel: s.panel === "files",
@@ -3018,6 +3107,103 @@ class Component extends DCLogic {
       stopMeeting: () => this.runMeeting("stop"),
       runMeetingSearch: () => this.runMeetingSearch(),
       clearMeeting: () => this.clearMeeting(),
+      // MCP servers (new in 1.20.0). The list is live server state (GET boots servers
+      // that were never started; manually stopped ones stay stopped). Config edits are
+      // FULL replacements, so the edit form pre-fills the current config including the
+      // anythingllm block - otherwise suppressedTools would be silently dropped.
+      mcpRows: (pd.mcp || []).map((sv) => {
+        const suppressed = (((sv.config || {}).anythingllm || {}).suppressedTools) || [];
+        const tools = (sv.tools || []).map((t) => {
+          const on = suppressed.indexOf(t.name) === -1;
+          return { name: t.name, description: t.description || "", enabled: on,
+            nextEnabled: on ? "0" : "1", toggleLabel: on ? "disable" : "enable" };
+        });
+        return {
+          name: sv.name, dot: sv.running ? "var(--ok)" : "var(--mu4)",
+          meta: [sv.running ? "running" : "stopped", (sv.process && sv.process.pid) ? "pid " + sv.process.pid : "", tools.length + " tools"].filter(Boolean).join(" · "),
+          error: sv.error ? String(sv.error) : "", hasError: !!sv.error,
+          toggleLabel: sv.running ? "stop" : "start",
+          toolCount: tools.length, tools, noTools: !tools.length,
+          toolsOpen: !!((pd.mcpOpen || {})[sv.name])
+        };
+      }),
+      noMcpServers: !(pd.mcp || []).length,
+      isMcpEditing: !!pd.mcpEdit,
+      notMcpEditing: !pd.mcpEdit,
+      mcpFormTitle: pd.mcpEdit ? "Edit server · " + pd.mcpEdit : "Add a server",
+      addMcpServer: async () => {
+        const fm = this.form();
+        const name = (fm.mcpName || "").trim();
+        if (!name) return this.toast("Enter a server name", "error");
+        let config; try { config = JSON.parse(fm.mcpConfig); } catch (err) { return this.toast("Config must be valid JSON", "error"); }
+        try {
+          const j = await this.api("/mcp-servers/new", { method: "POST", body: { name, config } });
+          if (j && j.success === false) return this.toast(j.error || "Could not add server", "error");
+          this.mergeForm({ mcpName: "", mcpConfig: this.panelDefaults().mcpConfig });
+          // The server is saved even when it fails to boot - surface startError loudly.
+          if (j && j.startError) this.toast("Saved, but failed to start: " + j.startError, "error");
+          else this.toast(j && j.running === false ? "Server saved (not running - check autoStart)" : "Server added and started");
+          this.loadPanel("mcp");
+        } catch (err) { this.toast(err.message, "error"); }
+      },
+      editMcpServer: (e) => {
+        const name = e.currentTarget.dataset.name;
+        const sv = ((this.state.panelData || {}).mcp || []).find((x) => x.name === name);
+        if (!sv) return this.toast("Server not in the current list - reload first", "error");
+        this.setPanelData({ mcpEdit: name });
+        this.mergeForm({ mcpName: name, mcpConfig: JSON.stringify(sv.config || {}, null, 2) });
+      },
+      saveMcpServer: async () => {
+        const name = (this.state.panelData || {}).mcpEdit;
+        if (!name) return;
+        let config; try { config = JSON.parse(this.form().mcpConfig); } catch (err) { return this.toast("Config must be valid JSON", "error"); }
+        try {
+          const j = await this.api("/mcp-servers/" + encodeURIComponent(name) + "/update", { method: "POST", body: { config } });
+          if (j && j.success === false) return this.toast(j.error || "Could not update server", "error");
+          this.setPanelData({ mcpEdit: null });
+          this.mergeForm({ mcpName: "", mcpConfig: this.panelDefaults().mcpConfig });
+          if (j && j.startError) this.toast("Saved, but failed to start: " + j.startError, "error");
+          else this.toast("Server updated and restarted");
+          this.loadPanel("mcp");
+        } catch (err) { this.toast(err.message, "error"); }
+      },
+      cancelMcpEdit: () => {
+        this.setPanelData({ mcpEdit: null });
+        this.mergeForm({ mcpName: "", mcpConfig: this.panelDefaults().mcpConfig });
+      },
+      toggleMcpServer: async (e) => {
+        const name = e.currentTarget.dataset.name;
+        try {
+          const j = await this.api("/mcp-servers/" + encodeURIComponent(name) + "/toggle", { method: "POST" });
+          if (j && j.success === false) return this.toast(j.error || "Toggle failed", "error");
+          this.toast("Toggled " + name); this.loadPanel("mcp");
+        } catch (err) { this.toast(err.message, "error"); }
+      },
+      deleteMcpServer: (e) => this.askConfirm("deleteMcp", "Delete MCP server?", "The server stops and is removed from the config file.", "Delete", e.currentTarget.dataset.name),
+      toggleMcpTools: (e) => {
+        const name = e.currentTarget.dataset.name;
+        this.setState((st) => {
+          const p = st.panelData || {};
+          const open = Object.assign({}, p.mcpOpen);
+          open[name] = !open[name];
+          return { panelData: Object.assign({}, p, { mcpOpen: open }) };
+        });
+      },
+      toggleMcpTool: async (e) => {
+        const d = e.currentTarget.dataset;
+        try {
+          const j = await this.api("/mcp-servers/" + encodeURIComponent(d.server) + "/toggle-tool", { method: "POST", body: { toolName: d.tool, enabled: d.enabled === "1" } });
+          if (j && j.success === false) return this.toast(j.error || "Tool toggle failed", "error");
+          this.toast(d.tool + (d.enabled === "1" ? " enabled" : " disabled")); this.loadPanel("mcp");
+        } catch (err) { this.toast(err.message, "error"); }
+      },
+      reloadMcpServers: async () => {
+        try {
+          const j = await this.api("/mcp-servers/reload", { method: "POST" });
+          this.setPanelData({ mcp: (j && j.servers) || [] });
+          this.toast("All MCP servers reloaded");
+        } catch (err) { this.toast(err.message, "error"); }
+      },
       downloadTyped: () => {
         const name = (this.form().fileName || "").trim();
         if (!name) return this.toast("Enter the storage filename from the chat response", "error");

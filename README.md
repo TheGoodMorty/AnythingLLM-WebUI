@@ -4,7 +4,7 @@ A self-hosted web interface for your AnythingLLM instance. Built to solve the mo
 
 **Why this exists:** The official AnythingLLM mobile and desktop apps sometimes fail to pair correctly. This web console provides a reliable alternative that works on any device with a browser — phones, tablets, laptops, or desktops.
 
-**API compatibility:** This release targets the AnythingLLM Developer API as of **v1.19.0** — including URL-array document imports, generated-image downloads, 404 handling for deleted threads, documents, and pins, a Meeting Assistant panel, and the transcribe multipart field rename (`audio` → `file`).
+**API compatibility:** This release targets the AnythingLLM Developer API as of **v1.20.0** — including MCP server management, the Meeting Assistant panel, URL-array document imports, generated-image downloads, and 404 handling for deleted threads, documents, and pins.
 
 ## Quick Start
 
@@ -259,6 +259,14 @@ server {
 - Track files seen in chat responses
 - Clear file history
 
+### MCP Panel
+- List MCP servers with running state, pid, and tool counts
+- Add servers (name + config JSON) and edit definitions — edits fully replace the config, pre-filled with the current one so tool suppression survives
+- Start/stop individual servers, or reload all from the config file
+- Enable/disable individual tools — disabled tools are not given to agents
+- Delete servers with confirmation
+- Servers that fail to boot are still saved; the card shows the start error
+
 ### API Console (Raw API tab)
 **For advanced users and testing:**
 - Execute ANY AnythingLLM API endpoint manually
@@ -375,6 +383,8 @@ The check mirrors the server-side capability guard merged upstream in [PR #6222]
 10. **`/img` results are session-only** — The developer API cannot write generated images into server-side chat history. Chat image bubbles disappear when the thread reloads; the Image Gen panel keeps the latest result.
 
 11. **Meetings panel is per-browser** — The Meeting Assistant API has no GET, so the console cannot query what is recording right now; it shows the last action and last search this browser saw (persisted in localStorage).
+
+12. **MCP listing boots servers** — `GET /v1/mcp-servers` starts servers that were never started (manually stopped ones stay stopped). Opening or refreshing the MCP panel has that side effect; `anythingllm.autoStart: false` in a server's config opts out of booting.
 
 ## Customization Ideas
 
